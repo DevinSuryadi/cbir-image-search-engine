@@ -28,7 +28,8 @@ def read_image(image_path: str | Path) -> np.ndarray:
     if path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
         raise ValueError(f"Unsupported image extension: {path.suffix}")
 
-    image = cv2.imread(str(path))
+    image_buffer = np.fromfile(path, dtype=np.uint8)
+    image = cv2.imdecode(image_buffer, cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError(f"Image could not be read: {path}")
 
