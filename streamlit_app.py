@@ -13,6 +13,7 @@ from src.visualization import read_image_rgb
 
 
 INDEX_OPTIONS = {
+    "Best evaluated index": "models/index-best.pkl",
     "HOG (best precision@10)": "models/index-hog.pkl",
     "HSV + HOG": "models/index-hsv-hog.pkl",
     "HSV": "models/index-hsv.pkl",

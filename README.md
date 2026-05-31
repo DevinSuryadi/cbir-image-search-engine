@@ -4,9 +4,7 @@ Project ini adalah image search engine berbasis Content-Based Image Retrieval
 (CBIR). Sistem akan mencari gambar yang mirip berdasarkan isi visual gambar,
 bukan berdasarkan nama file atau metadata.
 
-Tahap saat ini: **Tahap 6 - Result Visualization**.
-
-## Rencana Baseline
+## Baseline
 
 - Descriptor: region-based HSV color histogram
 - Similarity metric: cosine distance
@@ -23,6 +21,7 @@ Tahap saat ini: **Tahap 6 - Result Visualization**.
 ├── compare_indexes.py
 ├── evaluate_search.py
 ├── query_search.py
+├── rebuild_indexes.py
 ├── requirements.txt
 ├── streamlit_app.py
 ├── src/
@@ -45,6 +44,7 @@ Keterangan:
 - `build_index.py`: script untuk membuat index gambar
 - `compare_indexes.py`: script membandingkan beberapa index dengan precision@k
 - `query_search.py`: script untuk mencari gambar yang mirip dengan query
+- `rebuild_indexes.py`: script untuk rebuild semua index setelah dataset berubah
 - `evaluate_search.py`: script evaluasi precision@k berdasarkan folder kategori
 - `streamlit_app.py`: dashboard sederhana untuk testing dan visualisasi
 - `src/preprocessing.py`: fungsi membaca, validasi, dan konversi gambar
@@ -68,30 +68,30 @@ Keterangan:
 pip install -r requirements.txt
 ```
 
-## Tahapan Saat Ini
+## Tahapan Program
 
-Tahap preprocessing sudah mencakup:
+Tahap preprocessing mencakup:
 
 1. Membaca gambar dari file.
 2. Memvalidasi gambar berhasil dibaca.
 3. Mengubah gambar dari BGR ke HSV.
 4. Menyiapkan fungsi agar bisa digunakan oleh proses indexing dan query.
 
-Tahap feature descriptor sudah mencakup:
+Tahap feature descriptor mencakup:
 
 1. Membagi gambar menjadi 5 region.
 2. Menghitung histogram HSV pada setiap region.
 3. Melakukan normalisasi histogram.
 4. Menggabungkan histogram menjadi satu descriptor.
 
-Tahap indexing sudah mencakup:
+Tahap indexing mencakup:
 
 1. Membaca semua gambar dari `data/images/`.
 2. Menghitung descriptor setiap gambar.
 3. Menyimpan path gambar dan descriptor.
 4. Menyimpan index ke file di folder `models/`.
 
-Tahap query search sudah mencakup:
+Tahap query search mencakup:
 
 1. Membaca gambar query.
 2. Menghitung descriptor query.
@@ -100,7 +100,7 @@ Tahap query search sudah mencakup:
 5. Mengurutkan hasil berdasarkan distance terkecil.
 6. Mengembalikan top-k gambar paling mirip.
 
-Tahap visualisasi hasil sudah mencakup:
+Tahap visualisasi hasil mencakup:
 
 1. Menampilkan gambar query.
 2. Menampilkan top-k hasil dalam grid.
@@ -122,8 +122,6 @@ secara terpisah:
 python build_index.py --image-dir data/images --index-path models/index-hsv.pkl --descriptor hsv --verbose
 python build_index.py --image-dir data/images --index-path models/index-hog.pkl --descriptor hog --verbose
 ```
-
-Output index tidak perlu di-commit karena file `models/*.pkl` sudah diabaikan oleh `.gitignore`.
 
 ## Query Search
 
@@ -204,6 +202,24 @@ berdasarkan precision@k:
 ```bash
 python compare_indexes.py --index-paths models/index-hsv.pkl models/index-hog.pkl models/index-hsv-hog.pkl --top-k 10
 ```
+
+Jika dataset ditambah atau diubah, semua index dapat dibuat ulang sekaligus:
+
+```bash
+python rebuild_indexes.py --image-dir data/images --models-dir models --top-k 10 --verbose
+```
+
+Script tersebut akan membuat:
+
+```text
+models/index-hsv.pkl
+models/index-hog.pkl
+models/index-hsv-hog.pkl
+models/index-best.pkl
+```
+
+`index-best.pkl` adalah salinan index dengan precision@k terbaik dari hasil
+evaluasi saat script dijalankan.
 
 ## ORB Reranking
 
