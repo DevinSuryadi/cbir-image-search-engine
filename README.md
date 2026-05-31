@@ -20,12 +20,14 @@ Tahap saat ini: **Tahap 6 - Result Visualization**.
 ├── context.txt
 ├── README.md
 ├── build_index.py
+├── evaluate_search.py
 ├── query_search.py
 ├── requirements.txt
 ├── streamlit_app.py
 ├── src/
 │   ├── __init__.py
 │   ├── descriptors.py
+│   ├── evaluation.py
 │   ├── indexing.py
 │   ├── preprocessing.py
 │   ├── search.py
@@ -41,11 +43,13 @@ Keterangan:
 - `requirements.txt`: daftar library Python awal
 - `build_index.py`: script untuk membuat index gambar
 - `query_search.py`: script untuk mencari gambar yang mirip dengan query
+- `evaluate_search.py`: script evaluasi precision@k berdasarkan folder kategori
 - `streamlit_app.py`: dashboard sederhana untuk testing dan visualisasi
 - `src/preprocessing.py`: fungsi membaca, validasi, dan konversi gambar
 - `src/descriptors.py`: fungsi ekstraksi descriptor histogram HSV
 - `src/indexing.py`: fungsi build, save, dan load index
 - `src/search.py`: fungsi cosine distance dan pencarian top-k
+- `src/evaluation.py`: fungsi evaluasi hasil pencarian
 - `src/visualization.py`: fungsi menampilkan dan menyimpan grid hasil pencarian
 - `data/images/`: lokasi dataset gambar
 - `models/`: lokasi penyimpanan index/model hasil ekstraksi fitur
@@ -148,11 +152,46 @@ Dashboard mendukung dua cara query:
 
 Pastikan `models/index.pkl` sudah dibuat sebelum menjalankan pencarian.
 
+## Evaluation
+
+Jika dataset disusun berdasarkan folder kategori, evaluasi sederhana dapat
+dilakukan dengan precision@k. Parent folder gambar dianggap sebagai label.
+
+Contoh:
+
+```text
+data/images/
+├── Borobudur-Temple/
+├── Eiffel-Tower/
+└── Taj-Mahal/
+```
+
+Jalankan evaluasi:
+
+```bash
+python evaluate_search.py --index-path models/index.pkl --top-k 10
+```
+
+Untuk melihat hasil per query:
+
+```bash
+python evaluate_search.py --index-path models/index.pkl --top-k 10 --show-details
+```
+
+Jika ingin mencoba sebagian query saja:
+
+```bash
+python evaluate_search.py --index-path models/index.pkl --top-k 10 --max-queries 20
+```
+
+Catatan: query image itu sendiri dikeluarkan dari hasil evaluasi agar nilai
+precision tidak naik hanya karena sistem menemukan gambar yang sama persis.
+
 ## Tahapan Berikutnya
 
-Tahap berikutnya adalah pengujian dan analisis:
+Tahap berikutnya adalah peningkatan descriptor:
 
-1. Menguji beberapa gambar query.
-2. Mencatat hasil top-k.
-3. Menganalisis kekuatan dan kelemahan descriptor HSV.
-4. Menyiapkan screenshot untuk laporan.
+1. Menambahkan descriptor HOG.
+2. Membandingkan HSV vs HOG.
+3. Mencoba kombinasi HSV + HOG.
+4. Membandingkan hasilnya menggunakan precision@k.
