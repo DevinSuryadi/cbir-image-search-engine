@@ -6,8 +6,19 @@ from pathlib import Path
 
 import numpy as np
 
-from .descriptors import compute_hog_descriptor, compute_region_hsv_descriptor
-from .indexing import DESCRIPTOR_HOG, DESCRIPTOR_HSV, ImageIndex, load_index
+from .descriptors import (
+    compute_combined_hsv_hog_descriptor,
+    compute_hog_descriptor,
+    compute_region_hsv_descriptor,
+)
+from .indexing import (
+    DESCRIPTOR_HOG,
+    DESCRIPTOR_HSV,
+    DESCRIPTOR_HSV_HOG,
+    DESCRIPTOR_LEGACY_HSV,
+    ImageIndex,
+    load_index,
+)
 from .preprocessing import read_image, read_preprocess
 
 
@@ -54,12 +65,15 @@ def search_index(
 
     start_time = time.perf_counter()
 
-    if index.descriptor_name == DESCRIPTOR_HSV:
+    if index.descriptor_name in (DESCRIPTOR_HSV, DESCRIPTOR_LEGACY_HSV):
         query_hsv = read_preprocess(query_image_path)
         query_descriptor = compute_region_hsv_descriptor(query_hsv, bins=index.bins)
     elif index.descriptor_name == DESCRIPTOR_HOG:
         query_bgr = read_image(query_image_path)
         query_descriptor = compute_hog_descriptor(query_bgr)
+    elif index.descriptor_name == DESCRIPTOR_HSV_HOG:
+        query_bgr = read_image(query_image_path)
+        query_descriptor = compute_combined_hsv_hog_descriptor(query_bgr, bins=index.bins)
     else:
         raise ValueError(f"Unsupported descriptor type in index: {index.descriptor_name}")
 

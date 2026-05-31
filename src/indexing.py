@@ -7,13 +7,20 @@ from pathlib import Path
 
 import numpy as np
 
-from .descriptors import DEFAULT_HSV_BINS, compute_hog_descriptor, compute_region_hsv_descriptor
+from .descriptors import (
+    DEFAULT_HSV_BINS,
+    compute_combined_hsv_hog_descriptor,
+    compute_hog_descriptor,
+    compute_region_hsv_descriptor,
+)
 from .preprocessing import list_image_files, read_image, read_preprocess
 
 
 DESCRIPTOR_HSV = "hsv"
 DESCRIPTOR_HOG = "hog"
-SUPPORTED_DESCRIPTORS = (DESCRIPTOR_HSV, DESCRIPTOR_HOG)
+DESCRIPTOR_HSV_HOG = "hsv_hog"
+DESCRIPTOR_LEGACY_HSV = "region_hsv_histogram"
+SUPPORTED_DESCRIPTORS = (DESCRIPTOR_HSV, DESCRIPTOR_HOG, DESCRIPTOR_HSV_HOG)
 
 
 @dataclass
@@ -65,9 +72,12 @@ def build_image_index(
         if descriptor_type == DESCRIPTOR_HSV:
             image_hsv = read_preprocess(image_file)
             descriptor = compute_region_hsv_descriptor(image_hsv, bins=bins)
-        else:
+        elif descriptor_type == DESCRIPTOR_HOG:
             image_bgr = read_image(image_file)
             descriptor = compute_hog_descriptor(image_bgr)
+        else:
+            image_bgr = read_image(image_file)
+            descriptor = compute_combined_hsv_hog_descriptor(image_bgr, bins=bins)
 
         descriptors.append(descriptor)
         image_paths.append(str(image_file))

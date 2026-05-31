@@ -9,6 +9,14 @@ HSV_RANGES = (0, 180, 0, 256, 0, 256)
 DEFAULT_HOG_SIZE = (128, 128)
 
 
+def l2_normalize(descriptor: np.ndarray) -> np.ndarray:
+    """Normalize a descriptor with L2 norm."""
+    norm = np.linalg.norm(descriptor)
+    if norm == 0:
+        return descriptor.astype(np.float32)
+    return (descriptor / norm).astype(np.float32)
+
+
 def get_five_regions(image_shape: tuple[int, int, int] | tuple[int, int]) -> list[tuple[int, int, int, int]]:
     """Return top-left, top-right, bottom-right, bottom-left, and center regions."""
     height, width = image_shape[:2]
@@ -95,4 +103,25 @@ def compute_hog_descriptor(
         _nbins=9,
     )
     descriptor = hog.compute(gray)
-    return descriptor.flatten().astype(np.float32)
+    return l2_normalize(descriptor.flatten().astype(np.float32))
+
+
+def compute_combined_hsv_hog_descriptor(
+    image_bgr: np.ndarray,
+    bins: tuple[int, int, int] = DEFAULT_HSV_BINS,
+) -> np.ndarray:
+    """Compute a combined HSV color descriptor and HOG shape descriptor."""
+    if image_bgr.ndim != 3 or image_bgr.shape[2] != 3:
+        raise ValueError("BGR image must have 3 color channels")
+
+    image_hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    hsv_descriptor = compute_region_hsv_descriptor(image_hsv, bins=bins)
+    hog_descriptor = compute_hog_descriptor(image_bgr)
+
+    combined = np.concatenate(
+        [
+            l2_normalize(hsv_descriptor),
+            l2_normalize(hog_descriptor),
+        ]
+    )
+    return l2_normalize(combined)

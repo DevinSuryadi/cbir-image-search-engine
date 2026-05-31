@@ -20,6 +20,7 @@ Tahap saat ini: **Tahap 6 - Result Visualization**.
 ├── context.txt
 ├── README.md
 ├── build_index.py
+├── compare_indexes.py
 ├── evaluate_search.py
 ├── query_search.py
 ├── requirements.txt
@@ -42,6 +43,7 @@ Keterangan:
 - `context.txt`: penjelasan project, arsitektur, dan tahapan implementasi
 - `requirements.txt`: daftar library Python awal
 - `build_index.py`: script untuk membuat index gambar
+- `compare_indexes.py`: script membandingkan beberapa index dengan precision@k
 - `query_search.py`: script untuk mencari gambar yang mirip dengan query
 - `evaluate_search.py`: script evaluasi precision@k berdasarkan folder kategori
 - `streamlit_app.py`: dashboard sederhana untuk testing dan visualisasi
@@ -185,6 +187,19 @@ Untuk membandingkan descriptor HSV dan HOG:
 ```bash
 python evaluate_search.py --index-path models/index-hsv.pkl --top-k 10
 python evaluate_search.py --index-path models/index-hog.pkl --top-k 10
+```
+
+Untuk membuat index kombinasi HSV + HOG:
+
+```bash
+python build_index.py --image-dir data/images --index-path models/index-hsv-hog.pkl --descriptor hsv_hog --verbose
+```
+
+Untuk membandingkan beberapa index sekaligus dan melihat descriptor terbaik
+berdasarkan precision@k:
+
+```bash
+python compare_indexes.py --index-paths models/index-hsv.pkl models/index-hog.pkl models/index-hsv-hog.pkl --top-k 10
 ```
 
 Untuk melihat hasil per query:
