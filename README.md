@@ -113,6 +113,14 @@ Setelah dataset gambar dimasukkan ke `data/images/`, index dapat dibuat dengan:
 python build_index.py --image-dir data/images --index-path models/index.pkl --verbose
 ```
 
+Secara default, index memakai descriptor HSV. Untuk membuat index HSV dan HOG
+secara terpisah:
+
+```bash
+python build_index.py --image-dir data/images --index-path models/index-hsv.pkl --descriptor hsv --verbose
+python build_index.py --image-dir data/images --index-path models/index-hog.pkl --descriptor hog --verbose
+```
+
 Output index tidak perlu di-commit karena file `models/*.pkl` sudah diabaikan oleh `.gitignore`.
 
 ## Query Search
@@ -170,6 +178,13 @@ Jalankan evaluasi:
 
 ```bash
 python evaluate_search.py --index-path models/index.pkl --top-k 10
+```
+
+Untuk membandingkan descriptor HSV dan HOG:
+
+```bash
+python evaluate_search.py --index-path models/index-hsv.pkl --top-k 10
+python evaluate_search.py --index-path models/index-hog.pkl --top-k 10
 ```
 
 Untuk melihat hasil per query:

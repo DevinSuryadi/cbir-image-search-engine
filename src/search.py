@@ -6,9 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
-from .descriptors import compute_region_hsv_descriptor
-from .indexing import ImageIndex, load_index
-from .preprocessing import read_preprocess
+from .descriptors import compute_hog_descriptor, compute_region_hsv_descriptor
+from .indexing import DESCRIPTOR_HOG, DESCRIPTOR_HSV, ImageIndex, load_index
+from .preprocessing import read_image, read_preprocess
 
 
 @dataclass
@@ -54,8 +54,15 @@ def search_index(
 
     start_time = time.perf_counter()
 
-    query_hsv = read_preprocess(query_image_path)
-    query_descriptor = compute_region_hsv_descriptor(query_hsv, bins=index.bins)
+    if index.descriptor_name == DESCRIPTOR_HSV:
+        query_hsv = read_preprocess(query_image_path)
+        query_descriptor = compute_region_hsv_descriptor(query_hsv, bins=index.bins)
+    elif index.descriptor_name == DESCRIPTOR_HOG:
+        query_bgr = read_image(query_image_path)
+        query_descriptor = compute_hog_descriptor(query_bgr)
+    else:
+        raise ValueError(f"Unsupported descriptor type in index: {index.descriptor_name}")
+
     distances = cosine_distances(query_descriptor, index.descriptors)
 
     result_count = min(top_k, len(index.image_paths))

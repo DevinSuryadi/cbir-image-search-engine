@@ -6,6 +6,7 @@ import numpy as np
 
 DEFAULT_HSV_BINS = (8, 12, 3)
 HSV_RANGES = (0, 180, 0, 256, 0, 256)
+DEFAULT_HOG_SIZE = (128, 128)
 
 
 def get_five_regions(image_shape: tuple[int, int, int] | tuple[int, int]) -> list[tuple[int, int, int, int]]:
@@ -73,3 +74,25 @@ def compute_region_hsv_descriptor(
         descriptors.append(histogram)
 
     return np.concatenate(descriptors).astype(np.float32)
+
+
+def compute_hog_descriptor(
+    image_bgr: np.ndarray,
+    image_size: tuple[int, int] = DEFAULT_HOG_SIZE,
+) -> np.ndarray:
+    """Compute a HOG descriptor for image shape and texture information."""
+    if image_bgr.ndim != 3 or image_bgr.shape[2] != 3:
+        raise ValueError("BGR image must have 3 color channels")
+
+    resized = cv2.resize(image_bgr, image_size)
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+
+    hog = cv2.HOGDescriptor(
+        _winSize=image_size,
+        _blockSize=(16, 16),
+        _blockStride=(8, 8),
+        _cellSize=(8, 8),
+        _nbins=9,
+    )
+    descriptor = hog.compute(gray)
+    return descriptor.flatten().astype(np.float32)

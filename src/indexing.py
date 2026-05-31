@@ -7,8 +7,13 @@ from pathlib import Path
 
 import numpy as np
 
-from .descriptors import DEFAULT_HSV_BINS, compute_region_hsv_descriptor
-from .preprocessing import list_image_files, read_preprocess
+from .descriptors import DEFAULT_HSV_BINS, compute_hog_descriptor, compute_region_hsv_descriptor
+from .preprocessing import list_image_files, read_image, read_preprocess
+
+
+DESCRIPTOR_HSV = "hsv"
+DESCRIPTOR_HOG = "hog"
+SUPPORTED_DESCRIPTORS = (DESCRIPTOR_HSV, DESCRIPTOR_HOG)
 
 
 @dataclass
@@ -37,10 +42,14 @@ def validate_index(index: ImageIndex) -> None:
 
 def build_image_index(
     image_dir: str | Path,
+    descriptor_type: str = DESCRIPTOR_HSV,
     bins: tuple[int, int, int] = DEFAULT_HSV_BINS,
     verbose: bool = False,
 ) -> ImageIndex:
     """Build an image index from all supported images in a directory."""
+    if descriptor_type not in SUPPORTED_DESCRIPTORS:
+        raise ValueError(f"Unsupported descriptor type: {descriptor_type}")
+
     image_files = list_image_files(image_dir)
     if not image_files:
         raise ValueError(f"No supported image files found in: {image_dir}")
@@ -53,8 +62,12 @@ def build_image_index(
         if verbose:
             print(f"[{position}/{len(image_files)}] Indexing {image_file}")
 
-        image_hsv = read_preprocess(image_file)
-        descriptor = compute_region_hsv_descriptor(image_hsv, bins=bins)
+        if descriptor_type == DESCRIPTOR_HSV:
+            image_hsv = read_preprocess(image_file)
+            descriptor = compute_region_hsv_descriptor(image_hsv, bins=bins)
+        else:
+            image_bgr = read_image(image_file)
+            descriptor = compute_hog_descriptor(image_bgr)
 
         descriptors.append(descriptor)
         image_paths.append(str(image_file))
@@ -65,7 +78,7 @@ def build_image_index(
     index = ImageIndex(
         image_paths=image_paths,
         descriptors=descriptor_matrix,
-        descriptor_name="region_hsv_histogram",
+        descriptor_name=descriptor_type,
         bins=bins,
         build_seconds=build_seconds,
     )
@@ -103,10 +116,16 @@ def load_index(index_path: str | Path) -> ImageIndex:
 def build_and_save_index(
     image_dir: str | Path,
     index_path: str | Path,
+    descriptor_type: str = DESCRIPTOR_HSV,
     bins: tuple[int, int, int] = DEFAULT_HSV_BINS,
     verbose: bool = False,
 ) -> ImageIndex:
     """Build an image index and save it to disk."""
-    index = build_image_index(image_dir=image_dir, bins=bins, verbose=verbose)
+    index = build_image_index(
+        image_dir=image_dir,
+        descriptor_type=descriptor_type,
+        bins=bins,
+        verbose=verbose,
+    )
     save_index(index, index_path=index_path)
     return index
