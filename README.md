@@ -4,7 +4,7 @@ Project ini adalah image search engine berbasis Content-Based Image Retrieval
 (CBIR). Sistem akan mencari gambar yang mirip berdasarkan isi visual gambar,
 bukan berdasarkan nama file atau metadata.
 
-Tahap saat ini: **Tahap 5 - Query Search**.
+Tahap saat ini: **Tahap 6 - Result Visualization**.
 
 ## Rencana Baseline
 
@@ -22,12 +22,14 @@ Tahap saat ini: **Tahap 5 - Query Search**.
 ├── build_index.py
 ├── query_search.py
 ├── requirements.txt
+├── streamlit_app.py
 ├── src/
 │   ├── __init__.py
 │   ├── descriptors.py
 │   ├── indexing.py
 │   ├── preprocessing.py
-│   └── search.py
+│   ├── search.py
+│   └── visualization.py
 ├── data/
 │   └── images/
 └── models/
@@ -39,10 +41,12 @@ Keterangan:
 - `requirements.txt`: daftar library Python awal
 - `build_index.py`: script untuk membuat index gambar
 - `query_search.py`: script untuk mencari gambar yang mirip dengan query
+- `streamlit_app.py`: dashboard sederhana untuk testing dan visualisasi
 - `src/preprocessing.py`: fungsi membaca, validasi, dan konversi gambar
 - `src/descriptors.py`: fungsi ekstraksi descriptor histogram HSV
 - `src/indexing.py`: fungsi build, save, dan load index
 - `src/search.py`: fungsi cosine distance dan pencarian top-k
+- `src/visualization.py`: fungsi menampilkan dan menyimpan grid hasil pencarian
 - `data/images/`: lokasi dataset gambar
 - `models/`: lokasi penyimpanan index/model hasil ekstraksi fitur
 
@@ -90,6 +94,13 @@ Tahap query search sudah mencakup:
 5. Mengurutkan hasil berdasarkan distance terkecil.
 6. Mengembalikan top-k gambar paling mirip.
 
+Tahap visualisasi hasil sudah mencakup:
+
+1. Menampilkan gambar query.
+2. Menampilkan top-k hasil dalam grid.
+3. Menampilkan nilai distance pada setiap hasil.
+4. Menyimpan grid hasil ke file gambar.
+
 ## Build Index
 
 Setelah dataset gambar dimasukkan ke `data/images/`, index dapat dibuat dengan:
@@ -110,11 +121,38 @@ python query_search.py --query data/images/nama_gambar.jpg --index-path models/i
 
 Semakin kecil nilai distance, semakin mirip gambar hasil dengan gambar query.
 
+Untuk menampilkan hasil dalam window Matplotlib:
+
+```bash
+python query_search.py --query data/images/nama_gambar.jpg --index-path models/index.pkl --top-k 10 --show
+```
+
+Untuk menyimpan hasil ke file gambar:
+
+```bash
+python query_search.py --query data/images/nama_gambar.jpg --index-path models/index.pkl --top-k 10 --save outputs/result.png
+```
+
+## Streamlit Dashboard
+
+Dashboard sederhana dapat dijalankan untuk testing visual:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+Dashboard mendukung dua cara query:
+
+1. Upload gambar query.
+2. Memasukkan path gambar query lokal.
+
+Pastikan `models/index.pkl` sudah dibuat sebelum menjalankan pencarian.
+
 ## Tahapan Berikutnya
 
-Tahap berikutnya adalah membuat visualisasi hasil:
+Tahap berikutnya adalah pengujian dan analisis:
 
-1. Menampilkan gambar query.
-2. Menampilkan top-k hasil pencarian.
-3. Menampilkan nilai distance.
-4. Menampilkan waktu pencarian.
+1. Menguji beberapa gambar query.
+2. Mencatat hasil top-k.
+3. Menganalisis kekuatan dan kelemahan descriptor HSV.
+4. Menyiapkan screenshot untuk laporan.

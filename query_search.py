@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from src.search import search_from_index_file
+from src.visualization import save_search_results, show_search_results
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +24,15 @@ def parse_args() -> argparse.Namespace:
         default=10,
         help="Number of similar images to return",
     )
+    parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Show query and search results in a Matplotlib window",
+    )
+    parser.add_argument(
+        "--save",
+        help="Save query and search results grid to an image file",
+    )
     return parser.parse_args()
 
 
@@ -39,6 +49,20 @@ def main() -> None:
 
     for position, result in enumerate(response.results, start=1):
         print(f"{position:02d}. distance={result.distance:.6f} | {result.image_path}")
+
+    if args.save:
+        save_search_results(
+            query_image_path=args.query,
+            results=response.results,
+            output_path=args.save,
+        )
+        print(f"Result grid saved to: {args.save}")
+
+    if args.show:
+        show_search_results(
+            query_image_path=args.query,
+            results=response.results,
+        )
 
 
 if __name__ == "__main__":
