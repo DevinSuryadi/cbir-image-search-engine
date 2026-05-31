@@ -158,9 +158,12 @@ streamlit run streamlit_app.py
 Dashboard mendukung dua cara query:
 
 1. Upload gambar query.
-2. Memasukkan path gambar query lokal.
+2. Memilih descriptor/index pencarian.
+3. Mengatur jumlah top-k hasil.
 
-Pastikan `models/index.pkl` sudah dibuat sebelum menjalankan pencarian.
+Pastikan index yang dipilih sudah dibuat sebelum menjalankan pencarian. Dari
+hasil evaluasi dataset saat ini, HOG memiliki precision@10 terbaik sehingga
+menjadi pilihan default dashboard.
 
 ## Evaluation
 
@@ -200,6 +203,24 @@ berdasarkan precision@k:
 
 ```bash
 python compare_indexes.py --index-paths models/index-hsv.pkl models/index-hog.pkl models/index-hsv-hog.pkl --top-k 10
+```
+
+## ORB Reranking
+
+ORB reranking adalah tahap tambahan setelah pencarian awal. Sistem mengambil
+sejumlah kandidat dari index, lalu mengurutkan ulang kandidat tersebut
+berdasarkan jumlah keypoint match ORB.
+
+Contoh query dengan HOG + ORB reranking:
+
+```bash
+python query_search.py --query data/images/nama_gambar.jpg --index-path models/index-hog.pkl --top-k 10 --orb-rerank --candidate-k 30 --show
+```
+
+Contoh evaluasi HOG + ORB reranking:
+
+```bash
+python evaluate_search.py --index-path models/index-hog.pkl --top-k 10 --orb-rerank --candidate-k 30
 ```
 
 Untuk melihat hasil per query:

@@ -26,6 +26,8 @@ from .preprocessing import read_image, read_preprocess
 class SearchResult:
     image_path: str
     distance: float
+    orb_matches: int | None = None
+    initial_distance: float | None = None
 
 
 @dataclass

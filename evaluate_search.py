@@ -28,6 +28,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print per-query precision results",
     )
+    parser.add_argument(
+        "--orb-rerank",
+        action="store_true",
+        help="Rerank initial candidates using ORB keypoint matching",
+    )
+    parser.add_argument(
+        "--candidate-k",
+        type=int,
+        default=30,
+        help="Number of initial candidates used before ORB reranking",
+    )
     return parser.parse_args()
 
 
@@ -37,10 +48,13 @@ def main() -> None:
         index_path=args.index_path,
         top_k=args.top_k,
         max_queries=args.max_queries,
+        orb_rerank=args.orb_rerank,
+        candidate_k=args.candidate_k,
     )
 
     print(f"Evaluated queries: {summary.query_count}")
-    print(f"Metric: precision@{summary.top_k}")
+    method = "precision with ORB rerank" if args.orb_rerank else "precision"
+    print(f"Metric: {method}@{summary.top_k}")
     print(f"Mean precision: {summary.mean_precision:.4f}")
 
     if args.show_details:
