@@ -1,0 +1,9 @@
+{
+  "index_path": "models/index-best.pkl",
+  "top_k": 10,
+  "use_orb_rerank": true,
+  "candidate_k": 50,
+  "rerank_strategy": "weighted",
+  "distance_weight": 0.4,
+  "orb_weight": 0.6
+}

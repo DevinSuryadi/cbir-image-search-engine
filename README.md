@@ -110,6 +110,12 @@ Query dengan ORB reranking:
 python manage.py query --query "data/images/Borobudur-Temple/Borobudur.jpg" --index-path models/index-hog.pkl --top-k 10 --orb-rerank --candidate-k 30 --show
 ```
 
+Query dengan weighted HOG + ORB reranking:
+
+```bash
+python manage.py query --query "data/images/Borobudur-Temple/Borobudur.jpg" --index-path models/index-hog.pkl --top-k 10 --orb-rerank --candidate-k 50 --rerank-strategy weighted --distance-weight 0.4 --orb-weight 0.6 --show
+```
+
 Simpan visualisasi hasil:
 
 ```bash
@@ -128,6 +134,12 @@ Evaluasi dengan ORB reranking:
 python manage.py evaluate --index-path models/index-hog.pkl --top-k 10 --orb-rerank --candidate-k 30
 ```
 
+Evaluasi weighted HOG + ORB reranking:
+
+```bash
+python manage.py evaluate --index-path models/index-hog.pkl --top-k 10 --orb-rerank --candidate-k 50 --rerank-strategy weighted --distance-weight 0.4 --orb-weight 0.6
+```
+
 Bandingkan beberapa index:
 
 ```bash
@@ -140,12 +152,28 @@ python manage.py compare --index-paths models/index-hsv.pkl models/index-hog.pkl
 streamlit run streamlit_app.py
 ```
 
+Dashboard memakai parameter otomatis dari:
+
+```text
+config/search_config.json
+```
+
+Default konfigurasi:
+
+```text
+index_path: models/index-best.pkl
+top_k: 10
+use_orb_rerank: true
+candidate_k: 50
+rerank_strategy: weighted
+distance_weight: 0.4
+orb_weight: 0.6
+```
+
 Dashboard mendukung:
 
 - upload query image
-- memilih index/descriptor
-- top-k slider
-- ORB reranking
+- pencarian otomatis memakai konfigurasi terbaik yang tersimpan
 - tampilan hasil dalam grid
 
 ## Catatan Deploy
@@ -159,4 +187,16 @@ File index dan output visualisasi tidak perlu di-commit:
 ```text
 models/*.pkl
 outputs/
+```
+
+Jika index perlu ikut GitHub untuk demo/deploy dataset kecil, tambahkan secara paksa:
+
+```bash
+git add -f models/index-best.pkl
+```
+
+Namun untuk workflow development, index lebih baik dibuat ulang dengan:
+
+```bash
+python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose
 ```

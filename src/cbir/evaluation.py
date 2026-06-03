@@ -55,6 +55,9 @@ def evaluate_query(
     top_k: int = 10,
     orb_rerank: bool = False,
     candidate_k: int = 30,
+    rerank_strategy: str = "weighted",
+    distance_weight: float = 0.4,
+    orb_weight: float = 0.6,
 ) -> QueryEvaluation:
     """Evaluate one query using precision@k based on folder category labels."""
     if top_k <= 0:
@@ -76,6 +79,9 @@ def evaluate_query(
             query_image_path=query_image_path,
             candidate_results=candidates,
             top_k=top_k,
+            strategy=rerank_strategy,
+            distance_weight=distance_weight,
+            orb_weight=orb_weight,
         ).results
 
     query_label = get_category_label(query_image_path)
@@ -100,6 +106,9 @@ def evaluate_index(
     max_queries: int | None = None,
     orb_rerank: bool = False,
     candidate_k: int = 30,
+    rerank_strategy: str = "weighted",
+    distance_weight: float = 0.4,
+    orb_weight: float = 0.6,
 ) -> EvaluationSummary:
     """Evaluate an index using all indexed images or a limited number of queries."""
     query_paths = index.image_paths
@@ -115,6 +124,9 @@ def evaluate_index(
             top_k=top_k,
             orb_rerank=orb_rerank,
             candidate_k=candidate_k,
+            rerank_strategy=rerank_strategy,
+            distance_weight=distance_weight,
+            orb_weight=orb_weight,
         )
         for query_path in query_paths
     ]
@@ -134,6 +146,9 @@ def evaluate_index_file(
     max_queries: int | None = None,
     orb_rerank: bool = False,
     candidate_k: int = 30,
+    rerank_strategy: str = "weighted",
+    distance_weight: float = 0.4,
+    orb_weight: float = 0.6,
 ) -> EvaluationSummary:
     """Load an index file and evaluate it with precision@k."""
     index = load_index(index_path)
@@ -143,4 +158,7 @@ def evaluate_index_file(
         max_queries=max_queries,
         orb_rerank=orb_rerank,
         candidate_k=candidate_k,
+        rerank_strategy=rerank_strategy,
+        distance_weight=distance_weight,
+        orb_weight=orb_weight,
     )

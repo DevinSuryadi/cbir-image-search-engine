@@ -40,6 +40,9 @@ def add_query_parser(subparsers) -> None:
     parser.add_argument("--save")
     parser.add_argument("--orb-rerank", action="store_true")
     parser.add_argument("--candidate-k", type=int, default=30)
+    parser.add_argument("--rerank-strategy", choices=("weighted", "orb_matches"), default="weighted")
+    parser.add_argument("--distance-weight", type=float, default=0.4)
+    parser.add_argument("--orb-weight", type=float, default=0.6)
     parser.set_defaults(handler=handle_query)
 
 
@@ -51,6 +54,9 @@ def add_evaluate_parser(subparsers) -> None:
     parser.add_argument("--show-details", action="store_true")
     parser.add_argument("--orb-rerank", action="store_true")
     parser.add_argument("--candidate-k", type=int, default=30)
+    parser.add_argument("--rerank-strategy", choices=("weighted", "orb_matches"), default="weighted")
+    parser.add_argument("--distance-weight", type=float, default=0.4)
+    parser.add_argument("--orb-weight", type=float, default=0.6)
     parser.set_defaults(handler=handle_evaluate)
 
 
@@ -100,6 +106,9 @@ def handle_query(args: argparse.Namespace) -> None:
             query_image_path=args.query,
             candidate_results=response.results,
             top_k=args.top_k,
+            strategy=args.rerank_strategy,
+            distance_weight=args.distance_weight,
+            orb_weight=args.orb_weight,
         )
         response.results = rerank_response.results
         response.query_seconds += rerank_response.rerank_seconds
@@ -143,9 +152,14 @@ def handle_evaluate(args: argparse.Namespace) -> None:
         max_queries=args.max_queries,
         orb_rerank=args.orb_rerank,
         candidate_k=args.candidate_k,
+        rerank_strategy=args.rerank_strategy,
+        distance_weight=args.distance_weight,
+        orb_weight=args.orb_weight,
     )
 
     method = "precision with ORB rerank" if args.orb_rerank else "precision"
+    if args.orb_rerank:
+        method = f"{method} ({args.rerank_strategy})"
     print(f"Evaluated queries: {summary.query_count}")
     print(f"Metric: {method}@{summary.top_k}")
     print(f"Mean precision: {summary.mean_precision:.4f}")

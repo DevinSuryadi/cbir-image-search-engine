@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -11,14 +12,27 @@ from src.cbir.search import search_from_index_file, search_index
 from src.cbir.visualization import read_image_rgb
 
 
-INDEX_OPTIONS = {
-    "Best evaluated index": "models/index-best.pkl",
-    "HOG (best precision@10)": "models/index-hog.pkl",
-    "HSV + HOG": "models/index-hsv-hog.pkl",
-    "HSV": "models/index-hsv.pkl",
-    "Default index": "models/index.pkl",
+CONFIG_PATH = Path("config/search_config.json")
+DEFAULT_SEARCH_CONFIG = {
+    "index_path": "models/index-best.pkl",
+    "top_k": 10,
+    "use_orb_rerank": True,
+    "candidate_k": 50,
+    "rerank_strategy": "weighted",
+    "distance_weight": 0.4,
+    "orb_weight": 0.6,
 }
-DEFAULT_TOP_K = 10
+
+
+def load_search_config() -> dict:
+    """Load search parameters used by the dashboard."""
+    if not CONFIG_PATH.exists():
+        return DEFAULT_SEARCH_CONFIG
+
+    with CONFIG_PATH.open("r", encoding="utf-8") as config_file:
+        loaded_config = json.load(config_file)
+
+    return {**DEFAULT_SEARCH_CONFIG, **loaded_config}
 
 
 def save_uploaded_query(uploaded_file) -> str:
@@ -47,49 +61,77 @@ def show_search_results(results) -> None:
     for position, result in enumerate(results, start=1):
         with columns[(position - 1) % len(columns)]:
             st.image(read_image_rgb(result.image_path), use_container_width=True)
+
             if result.orb_matches is None:
                 st.caption(f"{position}. distance={result.distance:.4f}")
             else:
                 st.caption(
                     f"{position}. ORB matches={result.orb_matches} | "
-                    f"HOG distance={result.initial_distance:.4f}"
+                    f"distance={result.initial_distance:.4f}"
                 )
+                if result.rerank_score is not None:
+                    st.caption(f"rerank score={result.rerank_score:.4f}")
+
             st.caption(result.image_path)
+
+
+def run_search(query_path: str, search_config: dict):
+    """Run search with stored best parameters."""
+    index_path = search_config["index_path"]
+    top_k = int(search_config["top_k"])
+    use_orb_rerank = bool(search_config["use_orb_rerank"])
+
+    if not use_orb_rerank:
+        return search_from_index_file(
+            query_image_path=query_path,
+            index_path=index_path,
+            top_k=top_k,
+        )
+
+    index = load_index(index_path)
+    candidate_k = max(int(search_config["candidate_k"]), top_k)
+    response = search_index(
+        query_image_path=query_path,
+        index=index,
+        top_k=candidate_k,
+    )
+    rerank_response = rerank_results_with_orb(
+        query_image_path=query_path,
+        candidate_results=response.results,
+        top_k=top_k,
+        strategy=search_config["rerank_strategy"],
+        distance_weight=float(search_config["distance_weight"]),
+        orb_weight=float(search_config["orb_weight"]),
+    )
+    response.results = rerank_response.results
+    response.query_seconds += rerank_response.rerank_seconds
+    return response
+
+
+def show_search_config(search_config: dict) -> None:
+    """Show current search configuration without making it user-controlled."""
+    with st.expander("Search configuration", expanded=False):
+        st.write(f"Index: `{search_config['index_path']}`")
+        st.write(f"Top-k: `{search_config['top_k']}`")
+        st.write(f"ORB reranking: `{search_config['use_orb_rerank']}`")
+        st.write(f"Candidate-k: `{search_config['candidate_k']}`")
+        st.write(f"Rerank strategy: `{search_config['rerank_strategy']}`")
+        st.write(f"Distance weight: `{search_config['distance_weight']}`")
+        st.write(f"ORB weight: `{search_config['orb_weight']}`")
 
 
 def main() -> None:
     st.set_page_config(page_title="CBIR Image Search Engine", layout="wide")
+    search_config = load_search_config()
+    index_path = search_config["index_path"]
 
     st.title("CBIR Image Search Engine")
-    st.caption("Region-based HSV histogram with cosine distance")
-
+    st.caption("Automatic best-parameter search configuration")
     st.markdown(
-        "Atur **Top-k results** untuk menentukan berapa banyak gambar paling mirip "
-        "yang ditampilkan. Nilai yang lebih besar membantu membandingkan lebih banyak "
-        "hasil, sedangkan nilai yang lebih kecil membuat hasil lebih fokus."
+        "Upload gambar query, lalu sistem otomatis memakai konfigurasi pencarian "
+        "yang tersimpan untuk dataset ini."
     )
-
-    top_k = st.slider("Top-k results", min_value=1, max_value=20, value=DEFAULT_TOP_K)
-
-    selected_index_label = st.selectbox(
-        "Search descriptor",
-        options=list(INDEX_OPTIONS.keys()),
-        help="Pilih index/descriptor yang digunakan untuk pencarian. HOG menjadi default karena memiliki precision@10 terbaik pada eksperimen dataset ini.",
-    )
-    index_path = INDEX_OPTIONS[selected_index_label]
-
-    use_orb_rerank = st.checkbox(
-        "Use ORB reranking",
-        value=False,
-        help="Ambil kandidat awal dari descriptor terpilih, lalu urutkan ulang dengan ORB keypoint matching.",
-    )
-    candidate_k = st.slider(
-        "Initial candidates for reranking",
-        min_value=top_k,
-        max_value=50,
-        value=max(30, top_k),
-        disabled=not use_orb_rerank,
-    )
+    show_search_config(search_config)
 
     uploaded_file = st.file_uploader(
         "Upload query image",
@@ -111,26 +153,7 @@ def main() -> None:
     query_path = save_uploaded_query(uploaded_file)
 
     try:
-        if use_orb_rerank:
-            index = load_index(index_path)
-            response = search_index(
-                query_image_path=query_path,
-                index=index,
-                top_k=candidate_k,
-            )
-            rerank_response = rerank_results_with_orb(
-                query_image_path=query_path,
-                candidate_results=response.results,
-                top_k=top_k,
-            )
-            response.results = rerank_response.results
-            response.query_seconds += rerank_response.rerank_seconds
-        else:
-            response = search_from_index_file(
-                query_image_path=query_path,
-                index_path=index_path,
-                top_k=top_k,
-            )
+        response = run_search(query_path=query_path, search_config=search_config)
     except Exception as error:
         st.error(str(error))
         return
