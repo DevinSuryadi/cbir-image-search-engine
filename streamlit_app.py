@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile
 
 import streamlit as st
 
+from src.cbir.bovw import search_bovw_index_file
 from src.cbir.indexing import load_index
 from src.cbir.reranking import rerank_results_with_orb
 from src.cbir.search import search_from_index_file, search_index
@@ -14,6 +15,7 @@ from src.cbir.visualization import read_image_rgb
 
 CONFIG_PATH = Path("config/search_config.json")
 DEFAULT_SEARCH_CONFIG = {
+    "method": "classic",
     "index_path": "models/index-best.pkl",
     "top_k": 10,
     "use_orb_rerank": True,
@@ -21,6 +23,7 @@ DEFAULT_SEARCH_CONFIG = {
     "rerank_strategy": "weighted",
     "distance_weight": 0.4,
     "orb_weight": 0.6,
+    "verify_top_k": 0,
 }
 
 
@@ -77,8 +80,21 @@ def show_search_results(results) -> None:
 
 def run_search(query_path: str, search_config: dict):
     """Run search with stored best parameters."""
+    method = search_config["method"]
     index_path = search_config["index_path"]
     top_k = int(search_config["top_k"])
+
+    if method == "bovw":
+        return search_bovw_index_file(
+            query_image_path=query_path,
+            index_path=index_path,
+            top_k=top_k,
+            verify_top_k=int(search_config["verify_top_k"]),
+        )
+
+    if method != "classic":
+        raise ValueError(f"Unsupported search method: {method}")
+
     use_orb_rerank = bool(search_config["use_orb_rerank"])
 
     if not use_orb_rerank:
@@ -112,12 +128,14 @@ def show_search_config(search_config: dict) -> None:
     """Show current search configuration without making it user-controlled."""
     with st.expander("Search configuration", expanded=False):
         st.write(f"Index: `{search_config['index_path']}`")
+        st.write(f"Method: `{search_config['method']}`")
         st.write(f"Top-k: `{search_config['top_k']}`")
         st.write(f"ORB reranking: `{search_config['use_orb_rerank']}`")
         st.write(f"Candidate-k: `{search_config['candidate_k']}`")
         st.write(f"Rerank strategy: `{search_config['rerank_strategy']}`")
         st.write(f"Distance weight: `{search_config['distance_weight']}`")
         st.write(f"ORB weight: `{search_config['orb_weight']}`")
+        st.write(f"BoVW verify top-k: `{search_config['verify_top_k']}`")
 
 
 def main() -> None:

@@ -9,6 +9,8 @@ Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencar
 - Descriptor HOG untuk bentuk dan tekstur
 - Descriptor kombinasi HSV + HOG
 - ORB reranking untuk mengurutkan ulang kandidat berdasarkan keypoint matching
+- BoVW + TF-IDF untuk local-feature image retrieval
+- Geometric verification untuk reranking kandidat BoVW
 - Indexing descriptor ke file pickle
 - Query top-k gambar paling mirip
 - Evaluasi precision@k berbasis folder kategori
@@ -31,6 +33,7 @@ Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencar
     ├── __init__.py
     └── cbir/
         ├── __init__.py
+        ├── bovw.py
         ├── descriptors.py
         ├── evaluation.py
         ├── indexing.py
@@ -146,6 +149,58 @@ Bandingkan beberapa index:
 python manage.py compare --index-paths models/index-hsv.pkl models/index-hog.pkl models/index-hsv-hog.pkl --top-k 10
 ```
 
+## BoVW + TF-IDF
+
+BoVW adalah layer CBIR tambahan berbasis local feature. Metode ini cocok untuk
+landmark dan bangunan karena memakai visual words dari keypoint lokal.
+
+Build BoVW index dengan SIFT:
+
+```bash
+python manage.py bovw-build --image-dir data/images --index-path models/index-bovw.pkl --feature sift --vocabulary-size 256 --verbose
+```
+
+Jika SIFT tidak tersedia di OpenCV lokal, gunakan AKAZE:
+
+```bash
+python manage.py bovw-build --image-dir data/images --index-path models/index-bovw.pkl --feature akaze --vocabulary-size 256 --verbose
+```
+
+Query BoVW:
+
+```bash
+python manage.py bovw-query --query "data/images/Borobudur-Temple/Borobudur.jpg" --index-path models/index-bovw.pkl --top-k 10 --show
+```
+
+Query BoVW dengan geometric verification:
+
+```bash
+python manage.py bovw-query --query "data/images/Borobudur-Temple/Borobudur.jpg" --index-path models/index-bovw.pkl --top-k 10 --verify-top-k 50 --show
+```
+
+Evaluasi BoVW:
+
+```bash
+python manage.py bovw-evaluate --index-path models/index-bovw.pkl --top-k 10
+```
+
+Evaluasi BoVW dengan geometric verification:
+
+```bash
+python manage.py bovw-evaluate --index-path models/index-bovw.pkl --top-k 10 --verify-top-k 50
+```
+
+Untuk memakai BoVW di Streamlit, ubah `config/search_config.json`:
+
+```json
+{
+  "method": "bovw",
+  "index_path": "models/index-bovw.pkl",
+  "top_k": 10,
+  "verify_top_k": 50
+}
+```
+
 ## Streamlit
 
 ```bash
@@ -161,6 +216,7 @@ config/search_config.json
 Default konfigurasi:
 
 ```text
+method: classic
 index_path: models/index-best.pkl
 top_k: 10
 use_orb_rerank: true
@@ -179,24 +235,3 @@ Dashboard mendukung:
 ## Catatan Deploy
 
 Program saat ini membaca dataset dan index dari file lokal project. Jika deploy ke Streamlit Cloud, dataset dan index harus tersedia di environment deploy. Untuk dataset kecil, gambar bisa ikut GitHub. Untuk dataset besar atau dinamis, gunakan storage eksternal seperti Supabase Storage atau S3.
-
-## File Yang Tidak Perlu Di-Commit
-
-File index dan output visualisasi tidak perlu di-commit:
-
-```text
-models/*.pkl
-outputs/
-```
-
-Jika index perlu ikut GitHub untuk demo/deploy dataset kecil, tambahkan secara paksa:
-
-```bash
-git add -f models/index-best.pkl
-```
-
-Namun untuk workflow development, index lebih baik dibuat ulang dengan:
-
-```bash
-python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose
-```

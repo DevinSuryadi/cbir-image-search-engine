@@ -3,6 +3,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from src.cbir.bovw import (
+    SUPPORTED_BOVW_FEATURES,
+    build_and_save_bovw_index,
+    evaluate_bovw_index_file,
+    search_bovw_index_file,
+)
 from src.cbir.evaluation import evaluate_index_file
 from src.cbir.indexing import (
     SUPPORTED_DESCRIPTORS,
@@ -77,6 +83,37 @@ def add_rebuild_parser(subparsers) -> None:
     parser.add_argument("--skip-evaluation", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_rebuild)
+
+
+def add_bovw_build_parser(subparsers) -> None:
+    parser = subparsers.add_parser("bovw-build", help="Build a BoVW + TF-IDF index")
+    parser.add_argument("--image-dir", default="data/images")
+    parser.add_argument("--index-path", default="models/index-bovw.pkl")
+    parser.add_argument("--feature", choices=SUPPORTED_BOVW_FEATURES, default="sift")
+    parser.add_argument("--vocabulary-size", type=int, default=256)
+    parser.add_argument("--max-descriptors", type=int, default=50000)
+    parser.add_argument("--verbose", action="store_true")
+    parser.set_defaults(handler=handle_bovw_build)
+
+
+def add_bovw_query_parser(subparsers) -> None:
+    parser = subparsers.add_parser("bovw-query", help="Search with a BoVW index")
+    parser.add_argument("--query", required=True)
+    parser.add_argument("--index-path", default="models/index-bovw.pkl")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--verify-top-k", type=int, default=0)
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--save")
+    parser.set_defaults(handler=handle_bovw_query)
+
+
+def add_bovw_evaluate_parser(subparsers) -> None:
+    parser = subparsers.add_parser("bovw-evaluate", help="Evaluate a BoVW index")
+    parser.add_argument("--index-path", default="models/index-bovw.pkl")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--max-queries", type=int)
+    parser.add_argument("--verify-top-k", type=int, default=0)
+    parser.set_defaults(handler=handle_bovw_evaluate)
 
 
 def handle_build(args: argparse.Namespace) -> None:
@@ -238,6 +275,75 @@ def handle_rebuild(args: argparse.Namespace) -> None:
     )
 
 
+def handle_bovw_build(args: argparse.Namespace) -> None:
+    index = build_and_save_bovw_index(
+        image_dir=args.image_dir,
+        index_path=args.index_path,
+        feature_type=args.feature,
+        vocabulary_size=args.vocabulary_size,
+        max_descriptors=args.max_descriptors,
+        verbose=args.verbose,
+    )
+
+    print(f"Indexed images: {len(index.image_paths)}")
+    print(f"Feature type: {index.feature_type}")
+    print(f"Vocabulary size: {index.vocabulary_size}")
+    print(f"TF-IDF shape: {index.tfidf_matrix.shape}")
+    print(f"Build time: {index.build_seconds:.2f} seconds")
+    print(f"BoVW index saved to: {args.index_path}")
+
+
+def handle_bovw_query(args: argparse.Namespace) -> None:
+    response = search_bovw_index_file(
+        query_image_path=args.query,
+        index_path=args.index_path,
+        top_k=args.top_k,
+        verify_top_k=args.verify_top_k,
+    )
+
+    print(f"Query time: {response.query_seconds * 1000:.2f} ms")
+    print(f"Top-{len(response.results)} results:")
+
+    for position, result in enumerate(response.results, start=1):
+        if result.orb_matches is None:
+            print(f"{position:02d}. distance={result.distance:.6f} | {result.image_path}")
+        else:
+            print(
+                f"{position:02d}. "
+                f"inliers={result.orb_matches} | "
+                f"initial_distance={result.initial_distance:.6f} | "
+                f"{result.image_path}"
+            )
+
+    if args.save:
+        save_search_results(
+            query_image_path=args.query,
+            results=response.results,
+            output_path=args.save,
+        )
+        print(f"Result grid saved to: {args.save}")
+
+    if args.show:
+        show_search_results(query_image_path=args.query, results=response.results)
+
+
+def handle_bovw_evaluate(args: argparse.Namespace) -> None:
+    summary = evaluate_bovw_index_file(
+        index_path=args.index_path,
+        top_k=args.top_k,
+        max_queries=args.max_queries,
+        verify_top_k=args.verify_top_k,
+    )
+
+    metric = "precision"
+    if args.verify_top_k > 0:
+        metric = f"{metric} with geometric verification"
+
+    print(f"Evaluated queries: {summary.query_count}")
+    print(f"Metric: {metric}@{summary.top_k}")
+    print(f"Mean precision: {summary.mean_precision:.4f}")
+
+
 def build_all_indexes(image_dir: str, models_dir: str, verbose: bool) -> dict[str, Path]:
     output_dir = Path(models_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -312,6 +418,9 @@ def parse_args() -> argparse.Namespace:
     add_evaluate_parser(subparsers)
     add_compare_parser(subparsers)
     add_rebuild_parser(subparsers)
+    add_bovw_build_parser(subparsers)
+    add_bovw_query_parser(subparsers)
+    add_bovw_evaluate_parser(subparsers)
 
     return parser.parse_args()
 
