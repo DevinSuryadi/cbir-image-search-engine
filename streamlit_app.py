@@ -5,11 +5,10 @@ from tempfile import NamedTemporaryFile
 
 import streamlit as st
 
-from src.indexing import load_index
-from src.reranking import rerank_results_with_orb
-from src.search import search_index
-from src.search import search_from_index_file
-from src.visualization import read_image_rgb
+from src.cbir.indexing import load_index
+from src.cbir.reranking import rerank_results_with_orb
+from src.cbir.search import search_from_index_file, search_index
+from src.cbir.visualization import read_image_rgb
 
 
 INDEX_OPTIONS = {
@@ -100,7 +99,7 @@ def main() -> None:
     if not Path(index_path).exists():
         st.warning("Index file was not found. Build the index before searching.")
         st.code(
-            f"python build_index.py --image-dir data/images --index-path {index_path} --verbose",
+            "python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose",
             language="bash",
         )
         return
