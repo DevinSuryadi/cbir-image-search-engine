@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from sklearn.metrics.pairwise import cosine_distances
 
 from .preprocessing import list_image_files
 from .search import SearchResult, SearchResponse
@@ -67,6 +66,14 @@ def l2_normalize_matrix(matrix: np.ndarray) -> np.ndarray:
     return matrix / (norms + 1e-10)
 
 
+def cosine_distances_numpy(matrix: np.ndarray, query: np.ndarray) -> np.ndarray:
+    """Compute cosine distance between an embedding matrix and one query embedding."""
+    matrix_normalized = l2_normalize_matrix(matrix)
+    query_normalized = l2_normalize_matrix(query)
+    similarities = matrix_normalized @ query_normalized.T
+    return (1.0 - similarities.reshape(-1)).astype(np.float32)
+
+
 def compute_clip_embeddings(
     image_paths: list[str | Path],
     model,
@@ -86,13 +93,39 @@ def compute_clip_embeddings(
         inputs = {key: value.to(device) for key, value in inputs.items()}
 
         with torch.no_grad():
-            image_features = model.get_image_features(**inputs)
+            image_features = encode_clip_images(model, inputs)
 
         batch_embeddings = image_features.detach().cpu().numpy().astype(np.float32)
         embeddings.append(batch_embeddings)
 
     embedding_matrix = np.vstack(embeddings).astype(np.float32)
     return l2_normalize_matrix(embedding_matrix).astype(np.float32)
+
+
+def encode_clip_images(model, inputs):
+    """Encode images with CLIP vision features and return one embedding per image.
+
+    Some transformers installations return incompatible projected CLIP outputs.
+    For image-to-image retrieval, using the vision pooled output is stable because
+    the dataset and query are encoded by the same visual encoder.
+    """
+    if "pixel_values" not in inputs:
+        raise ValueError("CLIP image inputs must contain pixel_values")
+
+    pixel_values = inputs["pixel_values"]
+
+    if hasattr(model, "vision_model"):
+        vision_outputs = model.vision_model(pixel_values=pixel_values)
+        if hasattr(vision_outputs, "pooler_output") and vision_outputs.pooler_output is not None:
+            return vision_outputs.pooler_output
+        if hasattr(vision_outputs, "last_hidden_state"):
+            return vision_outputs.last_hidden_state.mean(dim=1)
+
+    image_features = model.get_image_features(pixel_values=pixel_values)
+    if hasattr(image_features, "detach"):
+        return image_features
+
+    raise TypeError(f"Unsupported CLIP image feature output: {type(image_features)}")
 
 
 def build_deep_embedding_index(
@@ -200,7 +233,7 @@ def search_deep_embedding_index(
         batch_size=batch_size,
     )
 
-    distances = cosine_distances(index.embeddings, query_embedding).reshape(-1)
+    distances = cosine_distances_numpy(index.embeddings, query_embedding)
     result_count = min(top_k, len(index.image_paths))
     result_indices = np.argsort(distances)[:result_count]
 
@@ -262,7 +295,7 @@ def evaluate_deep_embedding_index(
             device=resolved_device,
             batch_size=1,
         )
-        distances = cosine_distances(index.embeddings, query_embedding).reshape(-1)
+        distances = cosine_distances_numpy(index.embeddings, query_embedding)
         result_indices = np.argsort(distances)[: top_k + 1]
 
         results = [
