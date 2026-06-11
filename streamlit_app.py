@@ -22,7 +22,7 @@ from src.cbir.visualization import read_image_rgb
 CONFIG_PATH = Path("config/search_config.json")
 DEFAULT_SEARCH_CONFIG = {
     "method": "fusion",
-    "top_k": 10,
+    "top_k": 15,
     "rrf_k": 60,
     "deep_index_path": "models/index-clip.pkl",
     "deep_device": "auto",
