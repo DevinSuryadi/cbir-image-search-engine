@@ -1,6 +1,6 @@
 # CBIR Image Search Engine
 
-Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencari gambar yang mirip berdasarkan isi visual gambar, bukan nama file atau metadata.
+Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencari gambar yang mirip berdasarkan isi visual gambar.
 
 ## Fitur
 
@@ -70,7 +70,14 @@ Nama folder digunakan sebagai label saat evaluasi precision@k.
 
 ## Rebuild Semua Index
 
-Jalankan ini setelah menambah, menghapus, atau mengubah dataset:
+Jalankan ini setelah menambah, menghapus, atau mengubah dataset. Command ini
+membangun semua index yang dibutuhkan aplikasi, termasuk BoVW untuk fusion:
+
+```bash
+python manage.py prepare --image-dir data/images --models-dir models --top-k 10 --verbose
+```
+
+Jika hanya ingin rebuild index klasik tanpa BoVW:
 
 ```bash
 python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose
@@ -190,7 +197,30 @@ Evaluasi BoVW dengan geometric verification:
 python manage.py bovw-evaluate --index-path models/index-bovw.pkl --top-k 10 --verify-top-k 50
 ```
 
-Untuk memakai BoVW di Streamlit, ubah `config/search_config.json`:
+## Rank Fusion
+
+Rank fusion menggabungkan beberapa ranking dari metode berbeda. Default aplikasi
+menggunakan:
+
+```text
+HOG + weighted ORB reranking
+HSV + HOG
+BoVW + geometric verification
+```
+
+Query fusion:
+
+```bash
+python manage.py fusion-query --query "data/images/Borobudur-Temple/Borobudur.jpg" --top-k 10 --show
+```
+
+Evaluasi fusion:
+
+```bash
+python manage.py fusion-evaluate --top-k 10
+```
+
+Untuk memakai BoVW saja di Streamlit, ubah `config/search_config.json`:
 
 ```json
 {
@@ -216,14 +246,9 @@ config/search_config.json
 Default konfigurasi:
 
 ```text
-method: classic
-index_path: models/index-best.pkl
+method: fusion
 top_k: 10
-use_orb_rerank: true
-candidate_k: 50
-rerank_strategy: weighted
-distance_weight: 0.4
-orb_weight: 0.6
+rrf_k: 60
 ```
 
 Dashboard mendukung:

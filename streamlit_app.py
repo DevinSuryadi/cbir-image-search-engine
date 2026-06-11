@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 import streamlit as st
 
 from src.cbir.bovw import search_bovw_index_file
+from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
 from src.cbir.indexing import load_index
 from src.cbir.reranking import rerank_results_with_orb
 from src.cbir.search import search_from_index_file, search_index
@@ -15,15 +16,16 @@ from src.cbir.visualization import read_image_rgb
 
 CONFIG_PATH = Path("config/search_config.json")
 DEFAULT_SEARCH_CONFIG = {
-    "method": "classic",
-    "index_path": "models/index-best.pkl",
+    "method": "fusion",
     "top_k": 10,
+    "rrf_k": 60,
+    "index_path": "models/index-best.pkl",
     "use_orb_rerank": True,
     "candidate_k": 50,
     "rerank_strategy": "weighted",
     "distance_weight": 0.4,
     "orb_weight": 0.6,
-    "verify_top_k": 0,
+    "verify_top_k": 50,
 }
 
 
@@ -65,29 +67,53 @@ def show_search_results(results) -> None:
         with columns[(position - 1) % len(columns)]:
             st.image(read_image_rgb(result.image_path), use_container_width=True)
 
-            if result.orb_matches is None:
-                st.caption(f"{position}. distance={result.distance:.4f}")
-            else:
+            if result.source_count is not None and result.rerank_score is not None:
                 st.caption(
-                    f"{position}. ORB matches={result.orb_matches} | "
+                    f"{position}. fusion score={result.rerank_score:.4f} | "
+                    f"sources={result.source_count}"
+                )
+            elif result.orb_matches is not None:
+                st.caption(
+                    f"{position}. matches={result.orb_matches} | "
                     f"distance={result.initial_distance:.4f}"
                 )
-                if result.rerank_score is not None:
-                    st.caption(f"rerank score={result.rerank_score:.4f}")
+            else:
+                st.caption(f"{position}. distance={result.distance:.4f}")
 
             st.caption(result.image_path)
 
 
-def run_search(query_path: str, search_config: dict):
-    """Run search with stored best parameters."""
+def validate_required_indexes(search_config: dict) -> list[str]:
+    """Return missing index paths required by the selected method."""
     method = search_config["method"]
-    index_path = search_config["index_path"]
+
+    if method == "fusion":
+        return [
+            source.index_path
+            for source in DEFAULT_FUSION_SOURCES
+            if not Path(source.index_path).exists()
+        ]
+
+    return [] if Path(search_config["index_path"]).exists() else [search_config["index_path"]]
+
+
+def run_search(query_path: str, search_config: dict):
+    """Run search with stored parameters."""
+    method = search_config["method"]
     top_k = int(search_config["top_k"])
+
+    if method == "fusion":
+        return search_fusion(
+            query_image_path=query_path,
+            sources=DEFAULT_FUSION_SOURCES,
+            top_k=top_k,
+            rrf_k=int(search_config["rrf_k"]),
+        )
 
     if method == "bovw":
         return search_bovw_index_file(
             query_image_path=query_path,
-            index_path=index_path,
+            index_path=search_config["index_path"],
             top_k=top_k,
             verify_top_k=int(search_config["verify_top_k"]),
         )
@@ -95,21 +121,18 @@ def run_search(query_path: str, search_config: dict):
     if method != "classic":
         raise ValueError(f"Unsupported search method: {method}")
 
-    use_orb_rerank = bool(search_config["use_orb_rerank"])
-
-    if not use_orb_rerank:
+    if not bool(search_config["use_orb_rerank"]):
         return search_from_index_file(
             query_image_path=query_path,
-            index_path=index_path,
+            index_path=search_config["index_path"],
             top_k=top_k,
         )
 
-    index = load_index(index_path)
-    candidate_k = max(int(search_config["candidate_k"]), top_k)
+    index = load_index(search_config["index_path"])
     response = search_index(
         query_image_path=query_path,
         index=index,
-        top_k=candidate_k,
+        top_k=max(int(search_config["candidate_k"]), top_k),
     )
     rerank_response = rerank_results_with_orb(
         query_image_path=query_path,
@@ -127,43 +150,44 @@ def run_search(query_path: str, search_config: dict):
 def show_search_config(search_config: dict) -> None:
     """Show current search configuration without making it user-controlled."""
     with st.expander("Search configuration", expanded=False):
-        st.write(f"Index: `{search_config['index_path']}`")
         st.write(f"Method: `{search_config['method']}`")
         st.write(f"Top-k: `{search_config['top_k']}`")
-        st.write(f"ORB reranking: `{search_config['use_orb_rerank']}`")
-        st.write(f"Candidate-k: `{search_config['candidate_k']}`")
-        st.write(f"Rerank strategy: `{search_config['rerank_strategy']}`")
-        st.write(f"Distance weight: `{search_config['distance_weight']}`")
-        st.write(f"ORB weight: `{search_config['orb_weight']}`")
-        st.write(f"BoVW verify top-k: `{search_config['verify_top_k']}`")
+        if search_config["method"] == "fusion":
+            st.write(f"RRF k: `{search_config['rrf_k']}`")
+            st.write("Fusion sources:")
+            for source in DEFAULT_FUSION_SOURCES:
+                st.write(f"- `{source.name}`: `{source.index_path}`")
+        else:
+            st.write(f"Index: `{search_config['index_path']}`")
 
 
 def main() -> None:
     st.set_page_config(page_title="CBIR Image Search Engine", layout="wide")
     search_config = load_search_config()
-    index_path = search_config["index_path"]
 
     st.title("CBIR Image Search Engine")
-    st.caption("Automatic best-parameter search configuration")
+    st.caption("Automatic rank-fusion image search")
     st.markdown(
-        "Upload gambar query, lalu sistem otomatis memakai konfigurasi pencarian "
-        "yang tersimpan untuk dataset ini."
+        "Upload gambar query, lalu sistem otomatis menggabungkan beberapa metode "
+        "CBIR klasik untuk menghasilkan ranking akhir."
     )
     show_search_config(search_config)
+
+    missing_indexes = validate_required_indexes(search_config)
+    if missing_indexes:
+        st.warning("Required index files were not found.")
+        st.write(missing_indexes)
+        st.code(
+            "python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose\n"
+            "python manage.py bovw-build --image-dir data/images --index-path models/index-bovw.pkl --feature sift --vocabulary-size 256 --verbose",
+            language="bash",
+        )
+        return
 
     uploaded_file = st.file_uploader(
         "Upload query image",
         type=("jpg", "jpeg", "png", "bmp", "webp"),
     )
-
-    if not Path(index_path).exists():
-        st.warning("Index file was not found. Build the index before searching.")
-        st.code(
-            "python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose",
-            language="bash",
-        )
-        return
-
     if uploaded_file is None:
         st.info("Upload an image to start searching.")
         return

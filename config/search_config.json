@@ -1,6 +1,5 @@
 {
-  "method": "bovw",
-  "index_path": "models/index-bovw.pkl",
+  "method": "fusion",
   "top_k": 10,
-  "verify_top_k": 50
+  "rrf_k": 60
 }

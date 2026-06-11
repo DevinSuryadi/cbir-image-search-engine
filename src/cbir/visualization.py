@@ -39,7 +39,9 @@ def show_search_results(
         result_image = read_image_rgb(result.image_path)
         axis = figure.add_subplot(rows, columns, position)
         axis.imshow(result_image)
-        if result.orb_matches is None:
+        if result.source_count is not None and result.rerank_score is not None:
+            title = f"{position - 1}. f={result.rerank_score:.3f}"
+        elif result.orb_matches is None:
             title = f"{position - 1}. d={result.distance:.3f}"
         else:
             title = f"{position - 1}. m={result.orb_matches}"
@@ -75,7 +77,9 @@ def save_search_results(
         result_image = read_image_rgb(result.image_path)
         axis = figure.add_subplot(rows, columns, position)
         axis.imshow(result_image)
-        if result.orb_matches is None:
+        if result.source_count is not None and result.rerank_score is not None:
+            title = f"{position - 1}. f={result.rerank_score:.3f}"
+        elif result.orb_matches is None:
             title = f"{position - 1}. d={result.distance:.3f}"
         else:
             title = f"{position - 1}. m={result.orb_matches}"

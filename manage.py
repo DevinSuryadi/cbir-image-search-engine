@@ -7,9 +7,11 @@ from src.cbir.bovw import (
     SUPPORTED_BOVW_FEATURES,
     build_and_save_bovw_index,
     evaluate_bovw_index_file,
+    load_bovw_index,
     search_bovw_index_file,
 )
 from src.cbir.evaluation import evaluate_index_file
+from src.cbir.fusion import DEFAULT_FUSION_SOURCES, evaluate_fusion, search_fusion
 from src.cbir.indexing import (
     SUPPORTED_DESCRIPTORS,
     build_and_save_index,
@@ -114,6 +116,36 @@ def add_bovw_evaluate_parser(subparsers) -> None:
     parser.add_argument("--max-queries", type=int)
     parser.add_argument("--verify-top-k", type=int, default=0)
     parser.set_defaults(handler=handle_bovw_evaluate)
+
+
+def add_fusion_query_parser(subparsers) -> None:
+    parser = subparsers.add_parser("fusion-query", help="Search with rank fusion")
+    parser.add_argument("--query", required=True)
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--rrf-k", type=int, default=60)
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--save")
+    parser.set_defaults(handler=handle_fusion_query)
+
+
+def add_fusion_evaluate_parser(subparsers) -> None:
+    parser = subparsers.add_parser("fusion-evaluate", help="Evaluate rank fusion")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--rrf-k", type=int, default=60)
+    parser.add_argument("--max-queries", type=int)
+    parser.set_defaults(handler=handle_fusion_evaluate)
+
+
+def add_prepare_parser(subparsers) -> None:
+    parser = subparsers.add_parser("prepare", help="Build all indexes required by the app")
+    parser.add_argument("--image-dir", default="data/images")
+    parser.add_argument("--models-dir", default="models")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--bovw-feature", choices=SUPPORTED_BOVW_FEATURES, default="sift")
+    parser.add_argument("--vocabulary-size", type=int, default=256)
+    parser.add_argument("--max-descriptors", type=int, default=50000)
+    parser.add_argument("--verbose", action="store_true")
+    parser.set_defaults(handler=handle_prepare)
 
 
 def handle_build(args: argparse.Namespace) -> None:
@@ -344,6 +376,109 @@ def handle_bovw_evaluate(args: argparse.Namespace) -> None:
     print(f"Mean precision: {summary.mean_precision:.4f}")
 
 
+def handle_fusion_query(args: argparse.Namespace) -> None:
+    response = search_fusion(
+        query_image_path=args.query,
+        sources=DEFAULT_FUSION_SOURCES,
+        top_k=args.top_k,
+        rrf_k=args.rrf_k,
+    )
+
+    print(f"Query time: {response.query_seconds * 1000:.2f} ms")
+    print(f"Top-{len(response.results)} fusion results:")
+
+    for position, result in enumerate(response.results, start=1):
+        print(
+            f"{position:02d}. "
+            f"fusion_score={result.rerank_score:.6f} | "
+            f"sources={result.source_count} | "
+            f"best_distance={result.distance:.6f} | "
+            f"{result.image_path}"
+        )
+
+    if args.save:
+        save_search_results(
+            query_image_path=args.query,
+            results=response.results,
+            output_path=args.save,
+        )
+        print(f"Result grid saved to: {args.save}")
+
+    if args.show:
+        show_search_results(query_image_path=args.query, results=response.results)
+
+
+def handle_fusion_evaluate(args: argparse.Namespace) -> None:
+    query_paths = get_fusion_query_paths()
+    summary = evaluate_fusion(
+        query_paths=query_paths,
+        sources=DEFAULT_FUSION_SOURCES,
+        top_k=args.top_k,
+        rrf_k=args.rrf_k,
+        max_queries=args.max_queries,
+    )
+
+    print(f"Evaluated queries: {summary.query_count}")
+    print(f"Metric: fusion precision@{summary.top_k}")
+    print(f"Mean precision: {summary.mean_precision:.4f}")
+
+
+def handle_prepare(args: argparse.Namespace) -> None:
+    if args.models_dir != "models":
+        raise ValueError("prepare currently expects --models-dir models because app fusion config uses models/*.pkl")
+
+    print("Step 1/3: building classic indexes")
+    build_all_indexes(
+        image_dir=args.image_dir,
+        models_dir=args.models_dir,
+        verbose=args.verbose,
+    )
+
+    print("Step 2/3: building BoVW index")
+    bovw_index = build_and_save_bovw_index(
+        image_dir=args.image_dir,
+        index_path="models/index-bovw.pkl",
+        feature_type=args.bovw_feature,
+        vocabulary_size=args.vocabulary_size,
+        max_descriptors=args.max_descriptors,
+        verbose=args.verbose,
+    )
+    print(f"Indexed images: {len(bovw_index.image_paths)}")
+    print(f"Feature type: {bovw_index.feature_type}")
+    print(f"Vocabulary size: {bovw_index.vocabulary_size}")
+    print(f"TF-IDF shape: {bovw_index.tfidf_matrix.shape}")
+    print(f"Build time: {bovw_index.build_seconds:.2f} seconds")
+    print()
+
+    print("Step 3/3: evaluating fusion")
+    query_paths = get_fusion_query_paths()
+    summary = evaluate_fusion(
+        query_paths=query_paths,
+        sources=DEFAULT_FUSION_SOURCES,
+        top_k=args.top_k,
+        rrf_k=60,
+    )
+    print(f"Evaluated queries: {summary.query_count}")
+    print(f"Metric: fusion precision@{summary.top_k}")
+    print(f"Mean precision: {summary.mean_precision:.4f}")
+
+
+def get_fusion_query_paths() -> list[str]:
+    """Use the first available fusion source as the evaluation query set."""
+    for source in DEFAULT_FUSION_SOURCES:
+        index_path = Path(source.index_path)
+        if not index_path.exists():
+            continue
+
+        if source.method == "classic":
+            return load_index(index_path).image_paths
+
+        if source.method == "bovw":
+            return load_bovw_index(index_path).image_paths
+
+    raise FileNotFoundError("No fusion source index was found")
+
+
 def build_all_indexes(image_dir: str, models_dir: str, verbose: bool) -> dict[str, Path]:
     output_dir = Path(models_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -421,6 +556,9 @@ def parse_args() -> argparse.Namespace:
     add_bovw_build_parser(subparsers)
     add_bovw_query_parser(subparsers)
     add_bovw_evaluate_parser(subparsers)
+    add_fusion_query_parser(subparsers)
+    add_fusion_evaluate_parser(subparsers)
+    add_prepare_parser(subparsers)
 
     return parser.parse_args()
 

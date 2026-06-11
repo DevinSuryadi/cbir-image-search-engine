@@ -29,6 +29,7 @@ class SearchResult:
     orb_matches: int | None = None
     initial_distance: float | None = None
     rerank_score: float | None = None
+    source_count: int | None = None
 
 
 @dataclass
