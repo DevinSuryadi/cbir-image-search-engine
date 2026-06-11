@@ -20,6 +20,7 @@ from src.cbir.visualization import read_image_rgb
 
 
 CONFIG_PATH = Path("config/search_config.json")
+DATASET_PATH = Path("data/images")
 DEFAULT_SEARCH_CONFIG = {
     "method": "fusion",
     "top_k": 15,
@@ -99,6 +100,18 @@ def save_uploaded_query(uploaded_file) -> str:
     with NamedTemporaryFile(delete=False, suffix=suffix) as temporary_file:
         temporary_file.write(uploaded_file.getbuffer())
         return temporary_file.name
+
+
+def get_supported_categories(dataset_path: Path = DATASET_PATH) -> list[str]:
+    """Return dataset category names from immediate child folders."""
+    if not dataset_path.exists():
+        return []
+
+    return sorted(
+        path.name.replace("-", " ")
+        for path in dataset_path.iterdir()
+        if path.is_dir()
+    )
 
 
 @st.cache_resource(show_spinner="Loading deep embedding index...")
@@ -238,6 +251,20 @@ def show_missing_index_message(missing_indexes: list[str]) -> None:
     )
 
 
+def show_supported_categories() -> None:
+    """Render supported image categories based on dataset folders."""
+    categories = get_supported_categories()
+    if not categories:
+        return
+
+    with st.expander("Kategori Gambar yang Didukung", expanded=False):
+        st.markdown(
+            "Sistem melakukan pencarian terhadap dataset yang tersedia. "
+            "Kategori berikut terdeteksi dari folder dataset:"
+        )
+        st.markdown(", ".join(f"`{category}`" for category in categories))
+
+
 def show_search_results(results) -> None:
     """Display search results below the query image."""
     st.markdown("### Search Results")
@@ -312,6 +339,7 @@ def main() -> None:
             type=("jpg", "jpeg", "png", "bmp", "webp"),
         )
         st.caption("Gambar yang di-upload digunakan sebagai contoh query.")
+        show_supported_categories()
 
     if uploaded_file is None:
         st.info("Upload an image to start searching.")
