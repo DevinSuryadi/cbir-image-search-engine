@@ -3,3 +3,6 @@ numpy
 matplotlib
 streamlit
 scikit-learn
+Pillow
+torch
+transformers
