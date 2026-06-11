@@ -225,11 +225,38 @@ def search_deep_embedding_index(
         model_name=index.model_name,
         device=device,
     )
+    response = search_deep_embedding_index_with_model(
+        query_image_path=query_image_path,
+        index=index,
+        model=model,
+        processor=processor,
+        device=resolved_device,
+        top_k=top_k,
+        batch_size=batch_size,
+    )
+    response.query_seconds = time.perf_counter() - start_time
+    return response
+
+
+def search_deep_embedding_index_with_model(
+    query_image_path: str | Path,
+    index: DeepEmbeddingIndex,
+    model,
+    processor,
+    device: str,
+    top_k: int = 10,
+    batch_size: int = 1,
+) -> SearchResponse:
+    """Search using an already-loaded deep model and index."""
+    if top_k <= 0:
+        raise ValueError("top_k must be greater than zero")
+
+    start_time = time.perf_counter()
     query_embedding = compute_clip_embeddings(
         image_paths=[query_image_path],
         model=model,
         processor=processor,
-        device=resolved_device,
+        device=device,
         batch_size=batch_size,
     )
 

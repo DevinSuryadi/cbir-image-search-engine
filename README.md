@@ -291,4 +291,22 @@ Dashboard mendukung:
 
 ## Catatan Deploy
 
-Program saat ini membaca dataset dan index dari file lokal project. Jika deploy ke Streamlit Cloud, dataset dan index harus tersedia di environment deploy. Untuk dataset kecil, gambar bisa ikut GitHub. Untuk dataset besar atau dinamis, gunakan storage eksternal seperti Supabase Storage atau S3.
+Program membaca dataset dan index dari file lokal project. Saat deploy ke
+Streamlit Cloud, "lokal" berarti filesystem server Streamlit, bukan laptop.
+Karena itu dataset dan index harus tersedia di environment deploy.
+
+Untuk dataset kecil, gambar dan index dapat ikut GitHub. Jika index `.pkl`
+diabaikan `.gitignore`, tambahkan secara paksa hanya file yang dibutuhkan:
+
+```bash
+git add -f models/index-clip.pkl
+```
+
+Untuk dataset besar atau dinamis, gunakan storage eksternal seperti Supabase
+Storage atau S3.
+
+Dashboard Streamlit memakai cache untuk deep learning:
+
+- index CLIP di-load satu kali
+- model CLIP di-load satu kali
+- query berikutnya hanya menghitung embedding gambar upload

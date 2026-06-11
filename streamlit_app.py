@@ -7,7 +7,11 @@ from tempfile import NamedTemporaryFile
 import streamlit as st
 
 from src.cbir.bovw import search_bovw_index_file
-from src.cbir.deep_embedding import search_deep_embedding_index_file
+from src.cbir.deep_embedding import (
+    load_clip_model,
+    load_deep_embedding_index,
+    search_deep_embedding_index_with_model,
+)
 from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
 from src.cbir.indexing import load_index
 from src.cbir.reranking import rerank_results_with_orb
@@ -49,6 +53,18 @@ def save_uploaded_query(uploaded_file) -> str:
     with NamedTemporaryFile(delete=False, suffix=suffix) as temporary_file:
         temporary_file.write(uploaded_file.getbuffer())
         return temporary_file.name
+
+
+@st.cache_resource(show_spinner="Loading deep embedding index...")
+def get_cached_deep_index(index_path: str):
+    """Load the deep embedding index once per Streamlit session."""
+    return load_deep_embedding_index(index_path)
+
+
+@st.cache_resource(show_spinner="Loading CLIP model...")
+def get_cached_clip_model(model_name: str, device: str):
+    """Load the CLIP model once and reuse it for subsequent searches."""
+    return load_clip_model(model_name=model_name, device=device)
 
 
 def show_query_image(query_path: str) -> None:
@@ -118,11 +134,18 @@ def run_search(query_path: str, search_config: dict):
         )
 
     if method == "deep":
-        return search_deep_embedding_index_file(
-            query_image_path=query_path,
-            index_path=search_config["deep_index_path"],
-            top_k=top_k,
+        index = get_cached_deep_index(search_config["deep_index_path"])
+        model, processor, resolved_device = get_cached_clip_model(
+            model_name=index.model_name,
             device=search_config["deep_device"],
+        )
+        return search_deep_embedding_index_with_model(
+            query_image_path=query_path,
+            index=index,
+            model=model,
+            processor=processor,
+            device=resolved_device,
+            top_k=top_k,
         )
 
     if method == "bovw":
