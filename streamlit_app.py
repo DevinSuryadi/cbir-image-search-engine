@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 import streamlit as st
 
 from src.cbir.bovw import search_bovw_index_file
+from src.cbir.deep_embedding import search_deep_embedding_index_file
 from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
 from src.cbir.indexing import load_index
 from src.cbir.reranking import rerank_results_with_orb
@@ -19,6 +20,8 @@ DEFAULT_SEARCH_CONFIG = {
     "method": "fusion",
     "top_k": 10,
     "rrf_k": 60,
+    "deep_index_path": "models/index-clip.pkl",
+    "deep_device": "auto",
     "index_path": "models/index-best.pkl",
     "use_orb_rerank": True,
     "candidate_k": 50,
@@ -87,6 +90,10 @@ def validate_required_indexes(search_config: dict) -> list[str]:
     """Return missing index paths required by the selected method."""
     method = search_config["method"]
 
+    if method == "deep":
+        index_path = search_config["deep_index_path"]
+        return [] if Path(index_path).exists() else [index_path]
+
     if method == "fusion":
         return [
             source.index_path
@@ -108,6 +115,14 @@ def run_search(query_path: str, search_config: dict):
             sources=DEFAULT_FUSION_SOURCES,
             top_k=top_k,
             rrf_k=int(search_config["rrf_k"]),
+        )
+
+    if method == "deep":
+        return search_deep_embedding_index_file(
+            query_image_path=query_path,
+            index_path=search_config["deep_index_path"],
+            top_k=top_k,
+            device=search_config["deep_device"],
         )
 
     if method == "bovw":
@@ -157,6 +172,9 @@ def show_search_config(search_config: dict) -> None:
             st.write("Fusion sources:")
             for source in DEFAULT_FUSION_SOURCES:
                 st.write(f"- `{source.name}`: `{source.index_path}`")
+        elif search_config["method"] == "deep":
+            st.write(f"Deep index: `{search_config['deep_index_path']}`")
+            st.write(f"Deep device: `{search_config['deep_device']}`")
         else:
             st.write(f"Index: `{search_config['index_path']}`")
 
@@ -168,9 +186,20 @@ def main() -> None:
     st.title("CBIR Image Search Engine")
     st.caption("Automatic rank-fusion image search")
     st.markdown(
-        "Upload gambar query, lalu sistem otomatis menggabungkan beberapa metode "
-        "CBIR klasik untuk menghasilkan ranking akhir."
+        "Upload gambar query, lalu pilih apakah pencarian memakai metode klasik "
+        "atau deep learning embedding."
     )
+
+    search_mode = st.radio(
+        "Search method",
+        options=("Classic Fusion", "Deep Learning CLIP"),
+        horizontal=True,
+    )
+    if search_mode == "Deep Learning CLIP":
+        search_config["method"] = "deep"
+    else:
+        search_config["method"] = "fusion"
+
     show_search_config(search_config)
 
     missing_indexes = validate_required_indexes(search_config)
@@ -179,7 +208,8 @@ def main() -> None:
         st.write(missing_indexes)
         st.code(
             "python manage.py rebuild --image-dir data/images --models-dir models --top-k 10 --verbose\n"
-            "python manage.py bovw-build --image-dir data/images --index-path models/index-bovw.pkl --feature sift --vocabulary-size 256 --verbose",
+            "python manage.py bovw-build --image-dir data/images --index-path models/index-bovw.pkl --feature sift --vocabulary-size 256 --verbose\n"
+            "python manage.py deep-build --image-dir data/images --index-path models/index-clip.pkl --verbose",
             language="bash",
         )
         return
