@@ -10,6 +10,12 @@ from src.cbir.bovw import (
     load_bovw_index,
     search_bovw_index_file,
 )
+from src.cbir.deep_embedding import (
+    DEFAULT_CLIP_MODEL,
+    build_and_save_deep_embedding_index,
+    evaluate_deep_embedding_index_file,
+    search_deep_embedding_index_file,
+)
 from src.cbir.evaluation import evaluate_index_file
 from src.cbir.fusion import DEFAULT_FUSION_SOURCES, evaluate_fusion, search_fusion
 from src.cbir.indexing import (
@@ -146,6 +152,37 @@ def add_prepare_parser(subparsers) -> None:
     parser.add_argument("--max-descriptors", type=int, default=50000)
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_prepare)
+
+
+def add_deep_build_parser(subparsers) -> None:
+    parser = subparsers.add_parser("deep-build", help="Build a pretrained deep embedding index")
+    parser.add_argument("--image-dir", default="data/images")
+    parser.add_argument("--index-path", default="models/index-clip.pkl")
+    parser.add_argument("--model-name", default=DEFAULT_CLIP_MODEL)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument("--verbose", action="store_true")
+    parser.set_defaults(handler=handle_deep_build)
+
+
+def add_deep_query_parser(subparsers) -> None:
+    parser = subparsers.add_parser("deep-query", help="Search with a pretrained deep embedding index")
+    parser.add_argument("--query", required=True)
+    parser.add_argument("--index-path", default="models/index-clip.pkl")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--save")
+    parser.set_defaults(handler=handle_deep_query)
+
+
+def add_deep_evaluate_parser(subparsers) -> None:
+    parser = subparsers.add_parser("deep-evaluate", help="Evaluate a pretrained deep embedding index")
+    parser.add_argument("--index-path", default="models/index-clip.pkl")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--max-queries", type=int)
+    parser.add_argument("--device", default="auto")
+    parser.set_defaults(handler=handle_deep_evaluate)
 
 
 def handle_build(args: argparse.Namespace) -> None:
@@ -463,6 +500,62 @@ def handle_prepare(args: argparse.Namespace) -> None:
     print(f"Mean precision: {summary.mean_precision:.4f}")
 
 
+def handle_deep_build(args: argparse.Namespace) -> None:
+    index = build_and_save_deep_embedding_index(
+        image_dir=args.image_dir,
+        index_path=args.index_path,
+        model_name=args.model_name,
+        batch_size=args.batch_size,
+        device=args.device,
+        verbose=args.verbose,
+    )
+
+    print(f"Indexed images: {len(index.image_paths)}")
+    print(f"Model: {index.model_name}")
+    print(f"Embedding shape: {index.embeddings.shape}")
+    print(f"Build time: {index.build_seconds:.2f} seconds")
+    print(f"Deep embedding index saved to: {args.index_path}")
+
+
+def handle_deep_query(args: argparse.Namespace) -> None:
+    response = search_deep_embedding_index_file(
+        query_image_path=args.query,
+        index_path=args.index_path,
+        top_k=args.top_k,
+        device=args.device,
+    )
+
+    print(f"Query time: {response.query_seconds * 1000:.2f} ms")
+    print(f"Top-{len(response.results)} deep embedding results:")
+
+    for position, result in enumerate(response.results, start=1):
+        print(f"{position:02d}. distance={result.distance:.6f} | {result.image_path}")
+
+    if args.save:
+        save_search_results(
+            query_image_path=args.query,
+            results=response.results,
+            output_path=args.save,
+        )
+        print(f"Result grid saved to: {args.save}")
+
+    if args.show:
+        show_search_results(query_image_path=args.query, results=response.results)
+
+
+def handle_deep_evaluate(args: argparse.Namespace) -> None:
+    summary = evaluate_deep_embedding_index_file(
+        index_path=args.index_path,
+        top_k=args.top_k,
+        max_queries=args.max_queries,
+        device=args.device,
+    )
+
+    print(f"Evaluated queries: {summary.query_count}")
+    print(f"Metric: deep embedding precision@{summary.top_k}")
+    print(f"Mean precision: {summary.mean_precision:.4f}")
+
+
 def get_fusion_query_paths() -> list[str]:
     """Use the first available fusion source as the evaluation query set."""
     for source in DEFAULT_FUSION_SOURCES:
@@ -559,6 +652,9 @@ def parse_args() -> argparse.Namespace:
     add_fusion_query_parser(subparsers)
     add_fusion_evaluate_parser(subparsers)
     add_prepare_parser(subparsers)
+    add_deep_build_parser(subparsers)
+    add_deep_query_parser(subparsers)
+    add_deep_evaluate_parser(subparsers)
 
     return parser.parse_args()
 

@@ -11,6 +11,7 @@ Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencar
 - ORB reranking untuk mengurutkan ulang kandidat berdasarkan keypoint matching
 - BoVW + TF-IDF untuk local-feature image retrieval
 - Geometric verification untuk reranking kandidat BoVW
+- CLIP pretrained deep embedding untuk semantic image retrieval
 - Indexing descriptor ke file pickle
 - Query top-k gambar paling mirip
 - Evaluasi precision@k berbasis folder kategori
@@ -34,6 +35,7 @@ Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencar
     └── cbir/
         ├── __init__.py
         ├── bovw.py
+        ├── deep_embedding.py
         ├── descriptors.py
         ├── evaluation.py
         ├── indexing.py
@@ -220,6 +222,36 @@ Evaluasi fusion:
 python manage.py fusion-evaluate --top-k 10
 ```
 
+## Deep Learning CLIP
+
+Deep learning digunakan sebagai layer tambahan untuk perbandingan dengan metode
+klasik. Model tidak dilatih dari nol, tetapi memakai pretrained CLIP sebagai
+feature extractor.
+
+Build CLIP index:
+
+```bash
+python manage.py deep-build --image-dir data/images --index-path models/index-clip.pkl --verbose
+```
+
+Evaluasi CLIP:
+
+```bash
+python manage.py deep-evaluate --index-path models/index-clip.pkl --top-k 10
+```
+
+Query CLIP:
+
+```bash
+python manage.py deep-query --query "data/images/Borobudur-Temple/Borobudur.jpg" --index-path models/index-clip.pkl --top-k 10 --show
+```
+
+Notebook eksperimen:
+
+```text
+notebooks/deep_learning_search.ipynb
+```
+
 Untuk memakai BoVW saja di Streamlit, ubah `config/search_config.json`:
 
 ```json
@@ -254,9 +286,27 @@ rrf_k: 60
 Dashboard mendukung:
 
 - upload query image
-- pencarian otomatis memakai konfigurasi terbaik yang tersimpan
+- pilihan Classic Fusion atau Deep Learning CLIP
 - tampilan hasil dalam grid
 
 ## Catatan Deploy
 
-Program saat ini membaca dataset dan index dari file lokal project. Jika deploy ke Streamlit Cloud, dataset dan index harus tersedia di environment deploy. Untuk dataset kecil, gambar bisa ikut GitHub. Untuk dataset besar atau dinamis, gunakan storage eksternal seperti Supabase Storage atau S3.
+Program membaca dataset dan index dari file lokal project. Saat deploy ke
+Streamlit Cloud, "lokal" berarti filesystem server Streamlit, bukan laptop.
+Karena itu dataset dan index harus tersedia di environment deploy.
+
+Untuk dataset kecil, gambar dan index dapat ikut GitHub. Jika index `.pkl`
+diabaikan `.gitignore`, tambahkan secara paksa hanya file yang dibutuhkan:
+
+```bash
+git add -f models/index-clip.pkl
+```
+
+Untuk dataset besar atau dinamis, gunakan storage eksternal seperti Supabase
+Storage atau S3.
+
+Dashboard Streamlit memakai cache untuk deep learning:
+
+- index CLIP di-load satu kali
+- model CLIP di-load satu kali
+- query berikutnya hanya menghitung embedding gambar upload
