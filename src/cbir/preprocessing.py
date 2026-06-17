@@ -7,17 +7,44 @@ import numpy as np
 
 
 SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+DATASET_PATH = Path("data/images")
+
+
+def resolve_image_path(image_path: str | Path) -> Path:
+    """Resolve image paths saved on Windows or Linux environments."""
+    raw_path = str(image_path)
+    normalized_path = raw_path.replace("\\", "/")
+    candidates = [
+        Path(raw_path),
+        Path(normalized_path),
+    ]
+
+    dataset_marker = "data/images/"
+    if dataset_marker in normalized_path:
+        relative_dataset_path = normalized_path.split(dataset_marker, 1)[1]
+        candidates.append(DATASET_PATH / relative_dataset_path)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    if DATASET_PATH.exists():
+        filename_matches = list(DATASET_PATH.rglob(Path(normalized_path).name))
+        if filename_matches:
+            return filename_matches[0]
+
+    return Path(image_path)
 
 
 def is_supported_image_file(path: str | Path) -> bool:
     """Return True if the path has a supported image extension."""
-    image_path = Path(path)
+    image_path = resolve_image_path(path)
     return image_path.is_file() and image_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
 
 
 def read_image(image_path: str | Path) -> np.ndarray:
     """Read an image from disk in OpenCV BGR format."""
-    path = Path(image_path)
+    path = resolve_image_path(image_path)
 
     if not path.exists():
         raise FileNotFoundError(f"Image file was not found: {path}")
