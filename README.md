@@ -295,6 +295,21 @@ Program membaca dataset dan index dari file lokal project. Saat deploy ke
 Streamlit Cloud, "lokal" berarti filesystem server Streamlit, bukan laptop.
 Karena itu dataset dan index harus tersedia di environment deploy.
 
+Untuk mode Deep Learning CLIP, pastikan file index berikut ikut tersedia:
+
+```text
+models/index-clip.pkl
+```
+
+Jika file tersebut sudah dibuat di lokal tetapi belum muncul di GitHub, tambahkan
+ke commit:
+
+```bash
+git add models/index-clip.pkl
+git commit -m "chore: add CLIP index for deployment"
+git push
+```
+
 Untuk dataset kecil, gambar dan index dapat ikut GitHub. Jika index `.pkl`
 diabaikan `.gitignore`, tambahkan secara paksa hanya file yang dibutuhkan:
 

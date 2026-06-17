@@ -16,64 +16,48 @@ from src.cbir.deep_embedding import (
 
 CONFIG_PATH = Path("config/search_config.json")
 DATASET_PATH = Path("data/images")
+SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
 DEFAULT_SEARCH_CONFIG = {
     "method": "fusion",
     "top_k": 15,
     "rrf_k": 60,
     "deep_index_path": "models/index-clip.pkl",
     "deep_device": "auto",
-    "index_path": "models/index-best.pkl",
-    "use_orb_rerank": True,
-    "candidate_k": 50,
-    "rerank_strategy": "weighted",
-    "distance_weight": 0.4,
-    "orb_weight": 0.6,
-    "verify_top_k": 50,
 }
-
 
 METHOD_OPTIONS = {
     "Deep Learning CLIP": "deep",
     "Classic Fusion": "fusion",
 }
 
-
 METHOD_DESCRIPTIONS = {
-    "fusion": (
-        "Classic Fusion menggabungkan beberapa descriptor visual klasik dan sinyal "
-        "ranking menjadi satu urutan hasil akhir. Metode ini mencari kemiripan "
-        "berdasarkan komposisi warna, struktur bentuk, pola visual lokal, dan "
-        "konsistensi keypoint."
-    ),
     "deep": (
         "Deep Learning CLIP menggunakan pretrained image encoder untuk mengubah "
         "setiap gambar menjadi embedding semantik. Pencarian dilakukan dengan "
         "membandingkan embedding gambar query terhadap embedding dataset yang "
         "sudah di-index menggunakan cosine distance."
     ),
-    "bovw": (
-        "BoVW represents an image as a histogram of visual words built from local "
-        "features. It is focused on matching repeated local patterns and details."
-    ),
-    "classic": (
-        "Classic search uses one selected descriptor index and ranks dataset images "
-        "by descriptor distance."
+    "fusion": (
+        "Classic Fusion menggabungkan beberapa descriptor visual klasik dan sinyal "
+        "ranking menjadi satu urutan hasil akhir. Metode ini mencari kemiripan "
+        "berdasarkan komposisi warna, struktur bentuk, pola visual lokal, dan "
+        "konsistensi keypoint."
     ),
 }
 
-
 METHOD_WORKFLOWS = {
-    "fusion": [
-        ("Ekstraksi fitur", "Sistem mengekstraksi beberapa fitur visual klasik dari gambar query."),
-        ("Pencarian independen", "Setiap metode fitur menghasilkan daftar kandidat berdasarkan index masing-masing."),
-        ("Penggabungan ranking", "Ranking kandidat digabungkan menggunakan Reciprocal Rank Fusion untuk menghasilkan satu urutan akhir."),
-        ("Penampilan hasil", "Gambar dengan sinyal ranking gabungan terkuat ditampilkan sebagai hasil teratas."),
-    ],
     "deep": [
         ("Ekstraksi embedding", "Gambar query diubah menjadi embedding menggunakan pretrained CLIP image encoder."),
         ("Perbandingan vector", "Embedding query dibandingkan dengan embedding dataset yang sudah tersimpan di index."),
         ("Pengurutan hasil", "Gambar dengan cosine distance paling kecil ditempatkan pada ranking lebih tinggi."),
         ("Penampilan hasil", "Gambar dengan kemiripan semantik tertinggi ditampilkan sebagai hasil teratas."),
+    ],
+    "fusion": [
+        ("Ekstraksi fitur", "Sistem mengekstraksi beberapa fitur visual klasik dari gambar query."),
+        ("Pencarian independen", "Setiap metode fitur menghasilkan daftar kandidat berdasarkan index masing-masing."),
+        ("Penggabungan ranking", "Ranking kandidat digabungkan menggunakan Reciprocal Rank Fusion untuk menghasilkan satu urutan akhir."),
+        ("Penampilan hasil", "Gambar dengan sinyal ranking gabungan terkuat ditampilkan sebagai hasil teratas."),
     ],
 }
 
@@ -102,46 +86,23 @@ def read_image_for_display(image_path: str | Path) -> Image.Image:
     return Image.open(image_path).convert("RGB")
 
 
-def get_supported_categories(dataset_path: Path = DATASET_PATH) -> list[str]:
+def get_supported_categories() -> list[str]:
     """Return dataset category names from immediate child folders."""
-    if not dataset_path.exists():
+    if not DATASET_PATH.exists():
         return []
 
-    return sorted(
-        path.name.replace("-", " ")
-        for path in dataset_path.iterdir()
-        if path.is_dir()
-    )
+    return sorted(path.name.replace("-", " ") for path in DATASET_PATH.iterdir() if path.is_dir())
 
 
-def get_sample_query_file(
-    dataset_path: Path = DATASET_PATH,
-    preferred_category: str | None = None,
-) -> Path | None:
+def get_sample_query_file() -> Path | None:
     """Return one dataset image that can be used as a query example."""
-    if not dataset_path.exists():
+    if not DATASET_PATH.exists():
         return None
 
-    category_paths = sorted(path for path in dataset_path.iterdir() if path.is_dir())
-    if preferred_category is not None:
-        category_paths = [
-            path
-            for path in category_paths
-            if path.name.lower() == preferred_category.lower()
-        ] + [
-            path
-            for path in sorted(dataset_path.iterdir())
-            if path.is_dir() and path.name.lower() != preferred_category.lower()
-        ]
-
-    for category_path in category_paths:
-        category_images = sorted(
-            path
-            for path in category_path.iterdir()
-            if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-        )
-        if category_images:
-            return category_images[0]
+    for category_path in sorted(path for path in DATASET_PATH.iterdir() if path.is_dir()):
+        for image_path in sorted(category_path.iterdir()):
+            if image_path.is_file() and image_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS:
+                return image_path
 
     return None
 
@@ -160,40 +121,24 @@ def get_cached_clip_model(model_name: str, device: str):
 
 def validate_required_indexes(search_config: dict) -> list[str]:
     """Return missing index paths required by the selected method."""
-    method = search_config["method"]
-
-    if method == "deep":
+    if search_config["method"] == "deep":
         index_path = search_config["deep_index_path"]
         return [] if Path(index_path).exists() else [index_path]
 
-    if method == "fusion":
-        from src.cbir.fusion import DEFAULT_FUSION_SOURCES
+    from src.cbir.fusion import DEFAULT_FUSION_SOURCES
 
-        return [
-            source.index_path
-            for source in DEFAULT_FUSION_SOURCES
-            if not Path(source.index_path).exists()
-        ]
-
-    return [] if Path(search_config["index_path"]).exists() else [search_config["index_path"]]
+    return [
+        source.index_path
+        for source in DEFAULT_FUSION_SOURCES
+        if not Path(source.index_path).exists()
+    ]
 
 
 def run_search(query_path: str, search_config: dict):
-    """Run search with stored parameters."""
-    method = search_config["method"]
+    """Run search with the selected method."""
     top_k = int(search_config["top_k"])
 
-    if method == "fusion":
-        from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
-
-        return search_fusion(
-            query_image_path=query_path,
-            sources=DEFAULT_FUSION_SOURCES,
-            top_k=top_k,
-            rrf_k=int(search_config["rrf_k"]),
-        )
-
-    if method == "deep":
+    if search_config["method"] == "deep":
         index = get_cached_deep_index(search_config["deep_index_path"])
         model, processor, resolved_device = get_cached_clip_model(
             model_name=index.model_name,
@@ -208,93 +153,32 @@ def run_search(query_path: str, search_config: dict):
             top_k=top_k,
         )
 
-    if method == "bovw":
-        from src.cbir.bovw import search_bovw_index_file
+    from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
 
-        return search_bovw_index_file(
-            query_image_path=query_path,
-            index_path=search_config["index_path"],
-            top_k=top_k,
-            verify_top_k=int(search_config["verify_top_k"]),
-        )
-
-    if method != "classic":
-        raise ValueError(f"Unsupported search method: {method}")
-
-    if not bool(search_config["use_orb_rerank"]):
-        from src.cbir.search import search_from_index_file
-
-        return search_from_index_file(
-            query_image_path=query_path,
-            index_path=search_config["index_path"],
-            top_k=top_k,
-        )
-
-    from src.cbir.indexing import load_index
-    from src.cbir.reranking import rerank_results_with_orb
-    from src.cbir.search import search_index
-
-    index = load_index(search_config["index_path"])
-    response = search_index(
+    return search_fusion(
         query_image_path=query_path,
-        index=index,
-        top_k=max(int(search_config["candidate_k"]), top_k),
-    )
-    rerank_response = rerank_results_with_orb(
-        query_image_path=query_path,
-        candidate_results=response.results,
+        sources=DEFAULT_FUSION_SOURCES,
         top_k=top_k,
-        strategy=search_config["rerank_strategy"],
-        distance_weight=float(search_config["distance_weight"]),
-        orb_weight=float(search_config["orb_weight"]),
+        rrf_k=int(search_config["rrf_k"]),
     )
-    response.results = rerank_response.results
-    response.query_seconds += rerank_response.rerank_seconds
-    return response
 
 
-def show_configuration(search_config: dict) -> None:
-    """Render compact search configuration."""
-    st.markdown("**Search Configuration**")
-    st.caption(f"Method: `{search_config['method']}`")
-    st.caption(f"Top-k: `{search_config['top_k']}`")
-
-    if search_config["method"] == "fusion":
-        from src.cbir.fusion import DEFAULT_FUSION_SOURCES
-
-        st.caption(f"RRF k: `{search_config['rrf_k']}`")
-    elif search_config["method"] == "deep":
-        st.caption(f"Index: `{search_config['deep_index_path']}`")
-        st.caption(f"Device: `{search_config['deep_device']}`")
-    else:
-        st.caption(f"Index: `{search_config['index_path']}`")
-
-
-def show_method_description(method: str) -> None:
-    """Render explanation for the selected method."""
-    st.info(METHOD_DESCRIPTIONS.get(method, "Metode pencarian tidak dikenali."))
-
-
-def show_method_workflow(method: str) -> None:
-    """Render a concise workflow explanation for the selected method."""
-    workflow = METHOD_WORKFLOWS.get(method, [])
-    if not workflow:
+def show_sample_dataset_download() -> None:
+    """Render a download button for one sample query image from the repository dataset."""
+    sample_file = get_sample_query_file()
+    if sample_file is None:
         return
 
-    with st.expander("Cara Kerja Metode", expanded=False):
-        for title, description in workflow:
-            st.markdown(f"**{title}.** {description}")
-
-
-def show_missing_index_message(missing_indexes: list[str]) -> None:
-    """Render missing index instructions."""
-    st.warning("Required index files were not found.")
-    st.write(missing_indexes)
-    st.code(
-        "python manage.py prepare --image-dir data/images --models-dir models --top-k 10 --verbose\n"
-        "python manage.py deep-build --image-dir data/images --index-path models/index-clip.pkl --verbose",
-        language="bash",
+    suffix = sample_file.suffix.lower()
+    mime = "image/jpeg" if suffix in {".jpg", ".jpeg"} else f"image/{suffix.lstrip('.')}"
+    st.download_button(
+        label="Download Sample Query Image",
+        data=sample_file.read_bytes(),
+        file_name=f"sample-query{suffix}",
+        mime=mime,
+        help="Download one example image from the repository dataset for query testing.",
     )
+    st.caption("The sample image is selected from the dataset available in this app.")
 
 
 def show_supported_categories() -> None:
@@ -311,20 +195,40 @@ def show_supported_categories() -> None:
         st.markdown(", ".join(f"`{category}`" for category in categories))
 
 
-def show_sample_dataset_download() -> None:
-    """Render a download button for one sample query image from the repository dataset."""
-    sample_file = get_sample_query_file()
-    if sample_file is None:
-        return
+def show_method_description(method: str) -> None:
+    """Render explanation for the selected method."""
+    st.info(METHOD_DESCRIPTIONS[method])
 
-    st.download_button(
-        label="Download Sample Query Image",
-        data=sample_file.read_bytes(),
-        file_name=f"sample-query{sample_file.suffix.lower()}",
-        mime=f"image/{'jpeg' if sample_file.suffix.lower() in {'.jpg', '.jpeg'} else sample_file.suffix.lower().lstrip('.')}",
-        help="Download one example image from the repository dataset for query testing.",
+
+def show_method_workflow(method: str) -> None:
+    """Render a concise workflow explanation for the selected method."""
+    with st.expander("Cara Kerja Metode", expanded=False):
+        for title, description in METHOD_WORKFLOWS[method]:
+            st.markdown(f"**{title}.** {description}")
+
+
+def show_configuration(search_config: dict) -> None:
+    """Render compact search configuration."""
+    st.markdown("**Search Configuration**")
+    st.caption(f"Method: `{search_config['method']}`")
+    st.caption(f"Top-k: `{search_config['top_k']}`")
+
+    if search_config["method"] == "deep":
+        st.caption(f"Index: `{search_config['deep_index_path']}`")
+        st.caption(f"Device: `{search_config['deep_device']}`")
+    else:
+        st.caption(f"RRF k: `{search_config['rrf_k']}`")
+
+
+def show_missing_index_message(missing_indexes: list[str]) -> None:
+    """Render missing index instructions."""
+    st.warning("Required index files were not found.")
+    st.write(missing_indexes)
+    st.code(
+        "python manage.py deep-build --image-dir data/images --index-path models/index-clip.pkl --verbose\n"
+        "python manage.py prepare --image-dir data/images --models-dir models --top-k 10 --verbose",
+        language="bash",
     )
-    st.caption("The sample image is selected from the dataset available in this app.")
 
 
 def show_search_results(results) -> None:
@@ -344,11 +248,6 @@ def show_search_results(results) -> None:
                 st.caption(
                     f"{position}. fusion={result.rerank_score:.4f} | "
                     f"sources={result.source_count}"
-                )
-            elif result.orb_matches is not None:
-                st.caption(
-                    f"{position}. matches={result.orb_matches} | "
-                    f"distance={result.initial_distance:.4f}"
                 )
             else:
                 st.caption(f"{position}. distance={result.distance:.4f}")

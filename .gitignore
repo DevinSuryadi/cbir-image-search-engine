@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 venv/
 models/*.pkl
+!models/index-clip.pkl
 outputs/
 
 context.txt

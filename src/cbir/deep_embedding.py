@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .preprocessing import list_image_files
 from .search import SearchResult, SearchResponse
 
 
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
+SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
 @dataclass
@@ -58,6 +58,22 @@ def load_clip_model(model_name: str = DEFAULT_CLIP_MODEL, device: str = "auto"):
 def read_pil_rgb(image_path: str | Path) -> Image.Image:
     """Read an image as RGB PIL image."""
     return Image.open(image_path).convert("RGB")
+
+
+def list_image_files(image_dir: str | Path) -> list[Path]:
+    """List supported image files without importing OpenCV."""
+    directory = Path(image_dir)
+    if not directory.exists():
+        raise FileNotFoundError(f"Image directory was not found: {directory}")
+
+    if not directory.is_dir():
+        raise ValueError(f"Path is not a directory: {directory}")
+
+    return sorted(
+        path
+        for path in directory.rglob("*")
+        if path.is_file() and path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
+    )
 
 
 def l2_normalize_matrix(matrix: np.ndarray) -> np.ndarray:
