@@ -4,19 +4,14 @@ import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from PIL import Image
 import streamlit as st
 
-from src.cbir.bovw import search_bovw_index_file
 from src.cbir.deep_embedding import (
     load_clip_model,
     load_deep_embedding_index,
     search_deep_embedding_index_with_model,
 )
-from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
-from src.cbir.indexing import load_index
-from src.cbir.reranking import rerank_results_with_orb
-from src.cbir.search import search_from_index_file, search_index
-from src.cbir.visualization import read_image_rgb
 
 
 CONFIG_PATH = Path("config/search_config.json")
@@ -38,8 +33,8 @@ DEFAULT_SEARCH_CONFIG = {
 
 
 METHOD_OPTIONS = {
-    "Classic Fusion": "fusion",
     "Deep Learning CLIP": "deep",
+    "Classic Fusion": "fusion",
 }
 
 
@@ -100,6 +95,11 @@ def save_uploaded_query(uploaded_file) -> str:
     with NamedTemporaryFile(delete=False, suffix=suffix) as temporary_file:
         temporary_file.write(uploaded_file.getbuffer())
         return temporary_file.name
+
+
+def read_image_for_display(image_path: str | Path) -> Image.Image:
+    """Read an image for Streamlit display without importing OpenCV."""
+    return Image.open(image_path).convert("RGB")
 
 
 def get_supported_categories(dataset_path: Path = DATASET_PATH) -> list[str]:
@@ -167,6 +167,8 @@ def validate_required_indexes(search_config: dict) -> list[str]:
         return [] if Path(index_path).exists() else [index_path]
 
     if method == "fusion":
+        from src.cbir.fusion import DEFAULT_FUSION_SOURCES
+
         return [
             source.index_path
             for source in DEFAULT_FUSION_SOURCES
@@ -182,6 +184,8 @@ def run_search(query_path: str, search_config: dict):
     top_k = int(search_config["top_k"])
 
     if method == "fusion":
+        from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
+
         return search_fusion(
             query_image_path=query_path,
             sources=DEFAULT_FUSION_SOURCES,
@@ -205,6 +209,8 @@ def run_search(query_path: str, search_config: dict):
         )
 
     if method == "bovw":
+        from src.cbir.bovw import search_bovw_index_file
+
         return search_bovw_index_file(
             query_image_path=query_path,
             index_path=search_config["index_path"],
@@ -216,11 +222,17 @@ def run_search(query_path: str, search_config: dict):
         raise ValueError(f"Unsupported search method: {method}")
 
     if not bool(search_config["use_orb_rerank"]):
+        from src.cbir.search import search_from_index_file
+
         return search_from_index_file(
             query_image_path=query_path,
             index_path=search_config["index_path"],
             top_k=top_k,
         )
+
+    from src.cbir.indexing import load_index
+    from src.cbir.reranking import rerank_results_with_orb
+    from src.cbir.search import search_index
 
     index = load_index(search_config["index_path"])
     response = search_index(
@@ -248,6 +260,8 @@ def show_configuration(search_config: dict) -> None:
     st.caption(f"Top-k: `{search_config['top_k']}`")
 
     if search_config["method"] == "fusion":
+        from src.cbir.fusion import DEFAULT_FUSION_SOURCES
+
         st.caption(f"RRF k: `{search_config['rrf_k']}`")
     elif search_config["method"] == "deep":
         st.caption(f"Index: `{search_config['deep_index_path']}`")
@@ -324,7 +338,7 @@ def show_search_results(results) -> None:
     columns = st.columns(5)
     for position, result in enumerate(results, start=1):
         with columns[(position - 1) % len(columns)]:
-            st.image(read_image_rgb(result.image_path), use_container_width=True)
+            st.image(read_image_for_display(result.image_path), use_container_width=True)
 
             if result.source_count is not None and result.rerank_score is not None:
                 st.caption(
@@ -397,7 +411,7 @@ def main() -> None:
     query_path = save_uploaded_query(uploaded_file)
 
     with preview_column:
-        st.image(read_image_rgb(query_path), caption="Uploaded query", width=360)
+        st.image(read_image_for_display(query_path), caption="Uploaded query", width=360)
 
     try:
         with st.spinner("Searching similar images..."):
