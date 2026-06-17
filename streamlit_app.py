@@ -114,6 +114,38 @@ def get_supported_categories(dataset_path: Path = DATASET_PATH) -> list[str]:
     )
 
 
+def get_sample_query_file(
+    dataset_path: Path = DATASET_PATH,
+    preferred_category: str | None = None,
+) -> Path | None:
+    """Return one dataset image that can be used as a query example."""
+    if not dataset_path.exists():
+        return None
+
+    category_paths = sorted(path for path in dataset_path.iterdir() if path.is_dir())
+    if preferred_category is not None:
+        category_paths = [
+            path
+            for path in category_paths
+            if path.name.lower() == preferred_category.lower()
+        ] + [
+            path
+            for path in sorted(dataset_path.iterdir())
+            if path.is_dir() and path.name.lower() != preferred_category.lower()
+        ]
+
+    for category_path in category_paths:
+        category_images = sorted(
+            path
+            for path in category_path.iterdir()
+            if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        )
+        if category_images:
+            return category_images[0]
+
+    return None
+
+
 @st.cache_resource(show_spinner="Loading deep embedding index...")
 def get_cached_deep_index(index_path: str):
     """Load the deep embedding index once per Streamlit session."""
@@ -265,6 +297,22 @@ def show_supported_categories() -> None:
         st.markdown(", ".join(f"`{category}`" for category in categories))
 
 
+def show_sample_dataset_download() -> None:
+    """Render a download button for one sample query image from the repository dataset."""
+    sample_file = get_sample_query_file()
+    if sample_file is None:
+        return
+
+    st.download_button(
+        label="Download Sample Query Image",
+        data=sample_file.read_bytes(),
+        file_name=f"sample-query{sample_file.suffix.lower()}",
+        mime=f"image/{'jpeg' if sample_file.suffix.lower() in {'.jpg', '.jpeg'} else sample_file.suffix.lower().lstrip('.')}",
+        help="Download one example image from the repository dataset for query testing.",
+    )
+    st.caption("The sample image is selected from the dataset available in this app.")
+
+
 def show_search_results(results) -> None:
     """Display search results below the query image."""
     st.markdown("### Search Results")
@@ -310,6 +358,7 @@ def main() -> None:
     search_config = load_search_config()
 
     render_header()
+    show_sample_dataset_download()
 
     left_column, right_column = st.columns([2, 1], gap="large")
     with left_column:
