@@ -81,9 +81,40 @@ def save_uploaded_query(uploaded_file) -> str:
         return temporary_file.name
 
 
+def resolve_dataset_image_path(image_path: str | Path) -> Path:
+    """Resolve indexed image paths across Windows local paths and Linux deploy paths."""
+    raw_path = str(image_path)
+    normalized_path = raw_path.replace("\\", "/")
+    candidates = [Path(raw_path), Path(normalized_path)]
+
+    dataset_marker = "data/images/"
+    if dataset_marker in normalized_path:
+        relative_dataset_path = normalized_path.split(dataset_marker, 1)[1]
+        candidates.append(DATASET_PATH / relative_dataset_path)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    filename_matches = list(DATASET_PATH.rglob(Path(normalized_path).name))
+    if filename_matches:
+        return filename_matches[0]
+
+    raise FileNotFoundError(f"Image file was not found in deployed dataset: {image_path}")
+
+
 def read_image_for_display(image_path: str | Path) -> Image.Image:
     """Read an image for Streamlit display without importing OpenCV."""
-    return Image.open(image_path).convert("RGB")
+    return Image.open(resolve_dataset_image_path(image_path)).convert("RGB")
+
+
+def format_result_path(image_path: str | Path) -> str:
+    """Format result path for display."""
+    resolved_path = resolve_dataset_image_path(image_path)
+    try:
+        return str(resolved_path.relative_to(DATASET_PATH))
+    except ValueError:
+        return str(resolved_path)
 
 
 def get_supported_categories() -> list[str]:
@@ -252,7 +283,7 @@ def show_search_results(results) -> None:
             else:
                 st.caption(f"{position}. distance={result.distance:.4f}")
 
-            st.caption(result.image_path)
+            st.caption(format_result_path(result.image_path))
 
 
 def render_header() -> None:
