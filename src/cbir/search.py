@@ -36,6 +36,7 @@ class SearchResult:
 class SearchResponse:
     results: list[SearchResult]
     query_seconds: float
+    load_seconds: float | None = None
 
 
 def cosine_distances(query_descriptor: np.ndarray, descriptor_matrix: np.ndarray) -> np.ndarray:
