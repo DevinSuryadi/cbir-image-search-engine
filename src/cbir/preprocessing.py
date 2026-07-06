@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .app_config import DATASET_PATH, SUPPORTED_IMAGE_EXTENSIONS
+from .files import list_image_files
 
 
 def resolve_image_path(image_path: str | Path) -> Path:
@@ -87,21 +88,3 @@ def read_preprocess(image_path: str | Path) -> np.ndarray:
     image_bgr = read_image(image_path)
     return convert_bgr_to_hsv(image_bgr)
 
-
-def list_image_files(image_dir: str | Path) -> list[Path]:
-    """List supported image files from a dataset directory."""
-    directory = Path(image_dir)
-
-    if not directory.exists():
-        raise FileNotFoundError(f"Image directory was not found: {directory}")
-
-    if not directory.is_dir():
-        raise ValueError(f"Path is not a directory: {directory}")
-
-    image_files = [
-        path
-        for path in directory.rglob("*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
-    ]
-
-    return sorted(image_files)

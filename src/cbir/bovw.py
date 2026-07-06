@@ -9,9 +9,11 @@ import cv2
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.metrics.pairwise import cosine_distances
 
-from .preprocessing import list_image_files, read_image
+from .files import list_image_files
+from .labels import get_category_label, is_same_image
+from .orb import compute_orb_keypoints, count_homography_inliers
+from .preprocessing import read_image
 from .search import SearchResult, SearchResponse
 
 
@@ -246,7 +248,9 @@ def search_bovw_index(
     histogram = encode_bovw_histogram(descriptors, index.vocabulary).reshape(1, -1)
     query_tfidf = index.tfidf_transformer.transform(histogram).toarray().astype(np.float32)
 
-    distances = cosine_distances(index.tfidf_matrix, query_tfidf).reshape(-1)
+    query_vector = query_tfidf.reshape(-1)
+    similarities = index.tfidf_matrix @ query_vector
+    distances = (1.0 - similarities).astype(np.float32)
     candidate_count = min(max(top_k, verify_top_k), len(index.image_paths))
     candidate_indices = np.argsort(distances)[:candidate_count]
 
@@ -317,67 +321,6 @@ def rerank_bovw_with_geometric_verification(
     return verified_results[:top_k]
 
 
-def compute_orb_keypoints(image_path: str | Path):
-    """Compute ORB keypoints and descriptors for geometric verification."""
-    image_bgr = read_image(image_path)
-    image_gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-    orb = cv2.ORB_create(nfeatures=1500)
-    return orb.detectAndCompute(image_gray, None)
-
-
-def count_homography_inliers(
-    query_keypoints,
-    query_descriptors,
-    candidate_keypoints,
-    candidate_descriptors,
-    ratio: float = 0.75,
-) -> int:
-    """Count geometrically consistent matches using homography RANSAC."""
-    if query_descriptors is None or candidate_descriptors is None:
-        return 0
-
-    if len(query_descriptors) < 4 or len(candidate_descriptors) < 4:
-        return 0
-
-    matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
-    matches = matcher.knnMatch(query_descriptors, candidate_descriptors, k=2)
-
-    good_matches = []
-    for pair in matches:
-        if len(pair) != 2:
-            continue
-
-        best_match, second_best_match = pair
-        if best_match.distance < ratio * second_best_match.distance:
-            good_matches.append(best_match)
-
-    if len(good_matches) < 4:
-        return len(good_matches)
-
-    query_points = np.float32(
-        [query_keypoints[match.queryIdx].pt for match in good_matches]
-    ).reshape(-1, 1, 2)
-    candidate_points = np.float32(
-        [candidate_keypoints[match.trainIdx].pt for match in good_matches]
-    ).reshape(-1, 1, 2)
-
-    _, inlier_mask = cv2.findHomography(
-        query_points,
-        candidate_points,
-        cv2.RANSAC,
-        5.0,
-    )
-    if inlier_mask is None:
-        return 0
-
-    return int(inlier_mask.sum())
-
-
-def get_category_label(image_path: str | Path) -> str:
-    """Use parent folder as category label."""
-    return Path(image_path).parent.name
-
-
 def evaluate_bovw_index(
     index: BoVWIndex,
     top_k: int = 10,
@@ -400,7 +343,7 @@ def evaluate_bovw_index(
         results = [
             result
             for result in response.results
-            if Path(result.image_path).resolve() != Path(query_path).resolve()
+            if not is_same_image(query_path, result.image_path)
         ][:top_k]
 
         query_label = get_category_label(query_path)

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from .bovw import search_bovw_index_file
-from .evaluation import get_category_label
+from .labels import get_category_label, is_same_image
 from .indexing import load_index
 from .reranking import rerank_results_with_orb
 from .search import SearchResponse, SearchResult, search_from_index_file, search_index
@@ -219,7 +219,7 @@ def evaluate_fusion(
         results = [
             result
             for result in response.results
-            if Path(result.image_path).resolve() != Path(query_path).resolve()
+            if not is_same_image(query_path, result.image_path)
         ][:top_k]
 
         query_label = get_category_label(query_path)

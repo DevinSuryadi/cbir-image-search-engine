@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .labels import get_category_label, is_same_image
 from .indexing import ImageIndex, load_index
 from .reranking import rerank_results_with_orb
 from .search import SearchResult, search_index
@@ -25,16 +26,6 @@ class EvaluationSummary:
     query_count: int
     mean_precision: float
     evaluations: list[QueryEvaluation]
-
-
-def get_category_label(image_path: str | Path) -> str:
-    """Use the parent folder name as the image category label."""
-    return Path(image_path).parent.name
-
-
-def is_same_image(first_path: str | Path, second_path: str | Path) -> bool:
-    """Compare two image paths after resolving them."""
-    return Path(first_path).resolve() == Path(second_path).resolve()
 
 
 def filter_self_match(

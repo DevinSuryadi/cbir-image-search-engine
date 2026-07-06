@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .app_config import SUPPORTED_IMAGE_EXTENSIONS
+from .files import list_image_files
+from .labels import get_category_label, is_same_image
 from .search import SearchResult, SearchResponse
 
 
@@ -58,22 +59,6 @@ def load_clip_model(model_name: str = DEFAULT_CLIP_MODEL, device: str = "auto"):
 def read_pil_rgb(image_path: str | Path) -> Image.Image:
     """Read an image as RGB PIL image."""
     return Image.open(image_path).convert("RGB")
-
-
-def list_image_files(image_dir: str | Path) -> list[Path]:
-    """List supported image files without importing OpenCV."""
-    directory = Path(image_dir)
-    if not directory.exists():
-        raise FileNotFoundError(f"Image directory was not found: {directory}")
-
-    if not directory.is_dir():
-        raise ValueError(f"Path is not a directory: {directory}")
-
-    return sorted(
-        path
-        for path in directory.rglob("*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
-    )
 
 
 def l2_normalize_matrix(matrix: np.ndarray) -> np.ndarray:
@@ -236,11 +221,12 @@ def search_deep_embedding_index(
     if top_k <= 0:
         raise ValueError("top_k must be greater than zero")
 
-    start_time = time.perf_counter()
+    load_start = time.perf_counter()
     model, processor, resolved_device = load_clip_model(
         model_name=index.model_name,
         device=device,
     )
+    load_seconds = time.perf_counter() - load_start
     response = search_deep_embedding_index_with_model(
         query_image_path=query_image_path,
         index=index,
@@ -250,7 +236,7 @@ def search_deep_embedding_index(
         top_k=top_k,
         batch_size=batch_size,
     )
-    response.query_seconds = time.perf_counter() - start_time
+    response.load_seconds = load_seconds
     return response
 
 
@@ -308,11 +294,6 @@ def search_deep_embedding_index_file(
     )
 
 
-def get_category_label(image_path: str | Path) -> str:
-    """Use parent folder as category label."""
-    return Path(image_path).parent.name
-
-
 def evaluate_deep_embedding_index(
     index: DeepEmbeddingIndex,
     top_k: int = 10,
@@ -344,7 +325,7 @@ def evaluate_deep_embedding_index(
         results = [
             index.image_paths[index_position]
             for index_position in result_indices
-            if Path(index.image_paths[index_position]).resolve() != Path(query_path).resolve()
+            if not is_same_image(query_path, index.image_paths[index_position])
         ][:top_k]
 
         query_label = get_category_label(query_path)
