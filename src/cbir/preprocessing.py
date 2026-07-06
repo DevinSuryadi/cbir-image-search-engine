@@ -5,9 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-
-SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
-DATASET_PATH = Path("data/images")
+from .app_config import DATASET_PATH, SUPPORTED_IMAGE_EXTENSIONS
 
 
 def resolve_image_path(image_path: str | Path) -> Path:

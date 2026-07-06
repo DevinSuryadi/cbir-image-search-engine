@@ -3,6 +3,22 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from src.cbir.app_config import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_BOVW_INDEX_PATH,
+    DEFAULT_CLASSIC_INDEX_PATH,
+    DEFAULT_DEEP_DEVICE,
+    DEFAULT_DEEP_INDEX_PATH,
+    DEFAULT_IMAGE_DIR,
+    DEFAULT_HOG_INDEX_PATH,
+    DEFAULT_HSV_HOG_INDEX_PATH,
+    DEFAULT_HSV_INDEX_PATH,
+    DEFAULT_MAX_DESCRIPTORS,
+    DEFAULT_MODELS_DIR,
+    DEFAULT_RRF_K,
+    DEFAULT_TOP_K,
+    DEFAULT_VOCABULARY_SIZE,
+)
 from src.cbir.bovw import (
     SUPPORTED_BOVW_FEATURES,
     build_and_save_bovw_index,
@@ -30,16 +46,16 @@ from src.cbir.visualization import save_search_results, show_search_results
 
 
 INDEX_FILENAMES = {
-    "hsv": "index-hsv.pkl",
-    "hog": "index-hog.pkl",
-    "hsv_hog": "index-hsv-hog.pkl",
+    "hsv": Path(DEFAULT_HSV_INDEX_PATH).name,
+    "hog": Path(DEFAULT_HOG_INDEX_PATH).name,
+    "hsv_hog": Path(DEFAULT_HSV_HOG_INDEX_PATH).name,
 }
 
 
 def add_build_parser(subparsers) -> None:
     parser = subparsers.add_parser("build", help="Build one descriptor index")
-    parser.add_argument("--image-dir", default="data/images")
-    parser.add_argument("--index-path", default="models/index.pkl")
+    parser.add_argument("--image-dir", default=DEFAULT_IMAGE_DIR)
+    parser.add_argument("--index-path", default=DEFAULT_CLASSIC_INDEX_PATH)
     parser.add_argument("--descriptor", choices=SUPPORTED_DESCRIPTORS, default="hsv")
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_build)
@@ -48,8 +64,8 @@ def add_build_parser(subparsers) -> None:
 def add_query_parser(subparsers) -> None:
     parser = subparsers.add_parser("query", help="Search similar images")
     parser.add_argument("--query", required=True)
-    parser.add_argument("--index-path", default="models/index.pkl")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--index-path", default=DEFAULT_CLASSIC_INDEX_PATH)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--save")
     parser.add_argument("--orb-rerank", action="store_true")
@@ -62,8 +78,8 @@ def add_query_parser(subparsers) -> None:
 
 def add_evaluate_parser(subparsers) -> None:
     parser = subparsers.add_parser("evaluate", help="Evaluate precision@k")
-    parser.add_argument("--index-path", default="models/index.pkl")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--index-path", default=DEFAULT_CLASSIC_INDEX_PATH)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--max-queries", type=int)
     parser.add_argument("--show-details", action="store_true")
     parser.add_argument("--orb-rerank", action="store_true")
@@ -77,16 +93,16 @@ def add_evaluate_parser(subparsers) -> None:
 def add_compare_parser(subparsers) -> None:
     parser = subparsers.add_parser("compare", help="Compare multiple indexes")
     parser.add_argument("--index-paths", nargs="+", required=True)
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--max-queries", type=int)
     parser.set_defaults(handler=handle_compare)
 
 
 def add_rebuild_parser(subparsers) -> None:
     parser = subparsers.add_parser("rebuild", help="Rebuild all descriptor indexes")
-    parser.add_argument("--image-dir", default="data/images")
-    parser.add_argument("--models-dir", default="models")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--image-dir", default=DEFAULT_IMAGE_DIR)
+    parser.add_argument("--models-dir", default=DEFAULT_MODELS_DIR)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--max-queries", type=int)
     parser.add_argument("--skip-evaluation", action="store_true")
     parser.add_argument("--verbose", action="store_true")
@@ -95,11 +111,11 @@ def add_rebuild_parser(subparsers) -> None:
 
 def add_bovw_build_parser(subparsers) -> None:
     parser = subparsers.add_parser("bovw-build", help="Build a BoVW + TF-IDF index")
-    parser.add_argument("--image-dir", default="data/images")
-    parser.add_argument("--index-path", default="models/index-bovw.pkl")
+    parser.add_argument("--image-dir", default=DEFAULT_IMAGE_DIR)
+    parser.add_argument("--index-path", default=DEFAULT_BOVW_INDEX_PATH)
     parser.add_argument("--feature", choices=SUPPORTED_BOVW_FEATURES, default="sift")
-    parser.add_argument("--vocabulary-size", type=int, default=256)
-    parser.add_argument("--max-descriptors", type=int, default=50000)
+    parser.add_argument("--vocabulary-size", type=int, default=DEFAULT_VOCABULARY_SIZE)
+    parser.add_argument("--max-descriptors", type=int, default=DEFAULT_MAX_DESCRIPTORS)
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_bovw_build)
 
@@ -107,8 +123,8 @@ def add_bovw_build_parser(subparsers) -> None:
 def add_bovw_query_parser(subparsers) -> None:
     parser = subparsers.add_parser("bovw-query", help="Search with a BoVW index")
     parser.add_argument("--query", required=True)
-    parser.add_argument("--index-path", default="models/index-bovw.pkl")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--index-path", default=DEFAULT_BOVW_INDEX_PATH)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--verify-top-k", type=int, default=0)
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--save")
@@ -117,8 +133,8 @@ def add_bovw_query_parser(subparsers) -> None:
 
 def add_bovw_evaluate_parser(subparsers) -> None:
     parser = subparsers.add_parser("bovw-evaluate", help="Evaluate a BoVW index")
-    parser.add_argument("--index-path", default="models/index-bovw.pkl")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--index-path", default=DEFAULT_BOVW_INDEX_PATH)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--max-queries", type=int)
     parser.add_argument("--verify-top-k", type=int, default=0)
     parser.set_defaults(handler=handle_bovw_evaluate)
@@ -127,8 +143,8 @@ def add_bovw_evaluate_parser(subparsers) -> None:
 def add_fusion_query_parser(subparsers) -> None:
     parser = subparsers.add_parser("fusion-query", help="Search with rank fusion")
     parser.add_argument("--query", required=True)
-    parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument("--rrf-k", type=int, default=60)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--rrf-k", type=int, default=DEFAULT_RRF_K)
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--save")
     parser.set_defaults(handler=handle_fusion_query)
@@ -136,31 +152,31 @@ def add_fusion_query_parser(subparsers) -> None:
 
 def add_fusion_evaluate_parser(subparsers) -> None:
     parser = subparsers.add_parser("fusion-evaluate", help="Evaluate rank fusion")
-    parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument("--rrf-k", type=int, default=60)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--rrf-k", type=int, default=DEFAULT_RRF_K)
     parser.add_argument("--max-queries", type=int)
     parser.set_defaults(handler=handle_fusion_evaluate)
 
 
 def add_prepare_parser(subparsers) -> None:
     parser = subparsers.add_parser("prepare", help="Build all indexes required by the app")
-    parser.add_argument("--image-dir", default="data/images")
-    parser.add_argument("--models-dir", default="models")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--image-dir", default=DEFAULT_IMAGE_DIR)
+    parser.add_argument("--models-dir", default=DEFAULT_MODELS_DIR)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--bovw-feature", choices=SUPPORTED_BOVW_FEATURES, default="sift")
-    parser.add_argument("--vocabulary-size", type=int, default=256)
-    parser.add_argument("--max-descriptors", type=int, default=50000)
+    parser.add_argument("--vocabulary-size", type=int, default=DEFAULT_VOCABULARY_SIZE)
+    parser.add_argument("--max-descriptors", type=int, default=DEFAULT_MAX_DESCRIPTORS)
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_prepare)
 
 
 def add_deep_build_parser(subparsers) -> None:
     parser = subparsers.add_parser("deep-build", help="Build a pretrained deep embedding index")
-    parser.add_argument("--image-dir", default="data/images")
-    parser.add_argument("--index-path", default="models/index-clip.pkl")
+    parser.add_argument("--image-dir", default=DEFAULT_IMAGE_DIR)
+    parser.add_argument("--index-path", default=DEFAULT_DEEP_INDEX_PATH)
     parser.add_argument("--model-name", default=DEFAULT_CLIP_MODEL)
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--device", default="auto")
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--device", default=DEFAULT_DEEP_DEVICE)
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_deep_build)
 
@@ -168,9 +184,9 @@ def add_deep_build_parser(subparsers) -> None:
 def add_deep_query_parser(subparsers) -> None:
     parser = subparsers.add_parser("deep-query", help="Search with a pretrained deep embedding index")
     parser.add_argument("--query", required=True)
-    parser.add_argument("--index-path", default="models/index-clip.pkl")
-    parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument("--device", default="auto")
+    parser.add_argument("--index-path", default=DEFAULT_DEEP_INDEX_PATH)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--device", default=DEFAULT_DEEP_DEVICE)
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--save")
     parser.set_defaults(handler=handle_deep_query)
@@ -178,10 +194,10 @@ def add_deep_query_parser(subparsers) -> None:
 
 def add_deep_evaluate_parser(subparsers) -> None:
     parser = subparsers.add_parser("deep-evaluate", help="Evaluate a pretrained deep embedding index")
-    parser.add_argument("--index-path", default="models/index-clip.pkl")
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--index-path", default=DEFAULT_DEEP_INDEX_PATH)
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--max-queries", type=int)
-    parser.add_argument("--device", default="auto")
+    parser.add_argument("--device", default=DEFAULT_DEEP_DEVICE)
     parser.set_defaults(handler=handle_deep_evaluate)
 
 
@@ -461,7 +477,7 @@ def handle_fusion_evaluate(args: argparse.Namespace) -> None:
 
 
 def handle_prepare(args: argparse.Namespace) -> None:
-    if args.models_dir != "models":
+    if args.models_dir != DEFAULT_MODELS_DIR:
         raise ValueError("prepare currently expects --models-dir models because app fusion config uses models/*.pkl")
 
     print("Step 1/3: building classic indexes")
@@ -474,7 +490,7 @@ def handle_prepare(args: argparse.Namespace) -> None:
     print("Step 2/3: building BoVW index")
     bovw_index = build_and_save_bovw_index(
         image_dir=args.image_dir,
-        index_path="models/index-bovw.pkl",
+        index_path=DEFAULT_BOVW_INDEX_PATH,
         feature_type=args.bovw_feature,
         vocabulary_size=args.vocabulary_size,
         max_descriptors=args.max_descriptors,
@@ -493,7 +509,7 @@ def handle_prepare(args: argparse.Namespace) -> None:
         query_paths=query_paths,
         sources=DEFAULT_FUSION_SOURCES,
         top_k=args.top_k,
-        rrf_k=60,
+        rrf_k=DEFAULT_RRF_K,
     )
     print(f"Evaluated queries: {summary.query_count}")
     print(f"Metric: fusion precision@{summary.top_k}")

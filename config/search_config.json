@@ -1,5 +1,7 @@
 {
   "method": "fusion",
   "top_k": 15,
-  "rrf_k": 60
+  "rrf_k": 60,
+  "deep_index_path": "models/index-clip.pkl",
+  "deep_device": "auto"
 }

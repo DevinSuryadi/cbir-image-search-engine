@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from .app_config import SUPPORTED_IMAGE_EXTENSIONS
 from .search import SearchResult, SearchResponse
 
 
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
-SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
 @dataclass

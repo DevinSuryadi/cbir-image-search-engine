@@ -1,30 +1,22 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from PIL import Image
 import streamlit as st
 
+from src.cbir.app_config import (
+    DATASET_PATH,
+    SUPPORTED_IMAGE_EXTENSIONS,
+    load_search_config as load_search_config_from_disk,
+)
 from src.cbir.deep_embedding import (
     load_clip_model,
     load_deep_embedding_index,
     search_deep_embedding_index_with_model,
 )
 
-
-CONFIG_PATH = Path("config/search_config.json")
-DATASET_PATH = Path("data/images")
-SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-
-DEFAULT_SEARCH_CONFIG = {
-    "method": "fusion",
-    "top_k": 15,
-    "rrf_k": 60,
-    "deep_index_path": "models/index-clip.pkl",
-    "deep_device": "auto",
-}
 
 METHOD_OPTIONS = {
     "Deep Learning CLIP": "deep",
@@ -64,13 +56,7 @@ METHOD_WORKFLOWS = {
 
 def load_search_config() -> dict:
     """Load search parameters used by the dashboard."""
-    if not CONFIG_PATH.exists():
-        return DEFAULT_SEARCH_CONFIG
-
-    with CONFIG_PATH.open("r", encoding="utf-8") as config_file:
-        loaded_config = json.load(config_file)
-
-    return {**DEFAULT_SEARCH_CONFIG, **loaded_config}
+    return dict(load_search_config_from_disk())
 
 
 def save_uploaded_query(uploaded_file) -> str:
