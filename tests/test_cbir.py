@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 
 from src.cbir.app_config import DEFAULT_SEARCH_CONFIG, load_search_config
+from src.cbir.files import list_image_files
 from src.cbir.indexing import build_image_index
 from src.cbir.search import search_index
 
@@ -51,6 +52,16 @@ class SearchPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(response.results), 1)
         self.assertTrue(response.results[0].image_path.endswith("red.jpg"))
+
+    def test_list_image_files_filters_supported_extensions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            create_solid_color_image(root / "keep.jpg", (255, 255, 255))
+            (root / "skip.txt").write_text("not an image", encoding="utf-8")
+
+            image_files = list_image_files(root)
+
+        self.assertEqual([path.name for path in image_files], ["keep.jpg"])
 
 
 if __name__ == "__main__":
