@@ -9,7 +9,7 @@ import streamlit as st
 from src.cbir.app_config import (
     DATASET_PATH,
     SUPPORTED_IMAGE_EXTENSIONS,
-    load_search_config as load_search_config_from_disk,
+    load_search_config,
 )
 from src.cbir.deep_embedding import (
     load_clip_model,
@@ -52,13 +52,6 @@ METHOD_WORKFLOWS = {
         ("Penampilan hasil", "Gambar dengan sinyal ranking gabungan terkuat ditampilkan sebagai hasil teratas."),
     ],
 }
-
-
-def load_search_config() -> dict:
-    """Load search parameters used by the dashboard."""
-    return dict(load_search_config_from_disk())
-
-
 def save_uploaded_query(uploaded_file) -> str:
     """Save an uploaded query image to a temporary file and return its path."""
     suffix = Path(uploaded_file.name).suffix or ".jpg"

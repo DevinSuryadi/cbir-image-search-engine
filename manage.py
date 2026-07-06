@@ -541,6 +541,8 @@ def handle_deep_query(args: argparse.Namespace) -> None:
         device=args.device,
     )
 
+    if response.load_seconds is not None:
+        print(f"Model load time: {response.load_seconds * 1000:.2f} ms")
     print(f"Query time: {response.query_seconds * 1000:.2f} ms")
     print(f"Top-{len(response.results)} deep embedding results:")
 
