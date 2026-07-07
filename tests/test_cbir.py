@@ -52,6 +52,24 @@ class SearchPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(response.results), 1)
         self.assertTrue(response.results[0].image_path.endswith("red.jpg"))
+        self.assertTrue(Path(response.results[0].image_path).is_absolute())
+
+    def test_search_excludes_self_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            dataset_dir = root / "dataset"
+
+            query_image = dataset_dir / "Red" / "query.jpg"
+            other_image = dataset_dir / "Blue" / "blue.jpg"
+
+            create_solid_color_image(query_image, (255, 0, 0))
+            create_solid_color_image(other_image, (0, 0, 255))
+
+            index = build_image_index(dataset_dir, descriptor_type="hsv")
+            response = search_index(query_image_path=query_image, index=index, top_k=1)
+
+            self.assertEqual(len(response.results), 1)
+            self.assertTrue(Path(response.results[0].image_path).samefile(other_image))
 
     def test_list_image_files_filters_supported_extensions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

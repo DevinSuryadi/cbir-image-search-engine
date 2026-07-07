@@ -19,6 +19,7 @@ from .indexing import (
     ImageIndex,
     load_index,
 )
+from .labels import is_same_image
 from .preprocessing import read_image, read_preprocess
 
 
@@ -84,16 +85,19 @@ def search_index(
 
     distances = cosine_distances(query_descriptor, index.descriptors)
 
-    result_count = min(top_k, len(index.image_paths))
-    result_indices = np.argsort(distances)[:result_count]
+    results = []
+    for index_position in np.argsort(distances):
+        if is_same_image(query_image_path, index.image_paths[index_position]):
+            continue
 
-    results = [
-        SearchResult(
-            image_path=index.image_paths[index_position],
-            distance=float(distances[index_position]),
+        results.append(
+            SearchResult(
+                image_path=index.image_paths[index_position],
+                distance=float(distances[index_position]),
+            )
         )
-        for index_position in result_indices
-    ]
+        if len(results) >= min(top_k, len(index.image_paths)):
+            break
 
     query_seconds = time.perf_counter() - start_time
     return SearchResponse(results=results, query_seconds=query_seconds)

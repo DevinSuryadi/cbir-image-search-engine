@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .labels import get_category_label, is_same_image
+from .labels import get_category_label
 from .indexing import ImageIndex, load_index
 from .reranking import rerank_results_with_orb
 from .search import SearchResult, search_index
@@ -26,20 +26,6 @@ class EvaluationSummary:
     query_count: int
     mean_precision: float
     evaluations: list[QueryEvaluation]
-
-
-def filter_self_match(
-    query_image_path: str | Path,
-    results: list[SearchResult],
-) -> list[SearchResult]:
-    """Remove the query image itself from search results."""
-    return [
-        result
-        for result in results
-        if not is_same_image(query_image_path, result.image_path)
-    ]
-
-
 def evaluate_query(
     query_image_path: str | Path,
     index: ImageIndex,
@@ -62,10 +48,10 @@ def evaluate_query(
         index=index,
         top_k=(candidate_k + 1) if orb_rerank else (top_k + 1),
     )
-    results = filter_self_match(query_image_path, response.results)[:top_k]
+    results = response.results[:top_k]
 
     if orb_rerank:
-        candidates = filter_self_match(query_image_path, response.results)[:candidate_k]
+        candidates = response.results[:candidate_k]
         results = rerank_results_with_orb(
             query_image_path=query_image_path,
             candidate_results=candidates,

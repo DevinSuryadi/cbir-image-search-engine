@@ -10,7 +10,7 @@ import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.feature_extraction.text import TfidfTransformer
 
-from .files import list_image_files
+from .files import canonicalize_image_path, list_image_files
 from .labels import get_category_label, is_same_image
 from .orb import compute_orb_keypoints, count_homography_inliers
 from .preprocessing import read_image
@@ -171,7 +171,7 @@ def build_bovw_index(
         descriptors = extract_local_descriptors(image_path, feature_type)
         histogram = encode_bovw_histogram(descriptors, vocabulary)
         histograms.append(histogram)
-        indexed_paths.append(str(image_path))
+        indexed_paths.append(canonicalize_image_path(image_path))
 
     histogram_matrix = np.vstack(histograms).astype(np.float32)
     tfidf_transformer = TfidfTransformer(norm="l2")
@@ -254,13 +254,19 @@ def search_bovw_index(
     candidate_count = min(max(top_k, verify_top_k), len(index.image_paths))
     candidate_indices = np.argsort(distances)[:candidate_count]
 
-    results = [
-        SearchResult(
-            image_path=index.image_paths[index_position],
-            distance=float(distances[index_position]),
+    results = []
+    for index_position in candidate_indices:
+        if is_same_image(query_image_path, index.image_paths[index_position]):
+            continue
+
+        results.append(
+            SearchResult(
+                image_path=index.image_paths[index_position],
+                distance=float(distances[index_position]),
+            )
         )
-        for index_position in candidate_indices
-    ]
+        if len(results) >= candidate_count:
+            break
 
     if verify_top_k > 0:
         results = rerank_bovw_with_geometric_verification(

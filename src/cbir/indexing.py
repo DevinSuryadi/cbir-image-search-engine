@@ -13,7 +13,8 @@ from .descriptors import (
     compute_hog_descriptor,
     compute_region_hsv_descriptor,
 )
-from .preprocessing import list_image_files, read_image, read_preprocess
+from .files import canonicalize_image_path, list_image_files
+from .preprocessing import read_image, read_preprocess
 
 
 DESCRIPTOR_HSV = "hsv"
@@ -80,7 +81,7 @@ def build_image_index(
             descriptor = compute_combined_hsv_hog_descriptor(image_bgr, bins=bins)
 
         descriptors.append(descriptor)
-        image_paths.append(str(image_file))
+        image_paths.append(canonicalize_image_path(image_file))
 
     descriptor_matrix = np.vstack(descriptors).astype(np.float32)
     build_seconds = time.perf_counter() - start_time

@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .files import list_image_files
+from .files import canonicalize_image_path, list_image_files
+from .labels import is_same_image
 from .labels import get_category_label, is_same_image
 from .search import SearchResult, SearchResponse
 
@@ -159,7 +160,7 @@ def build_deep_embedding_index(
     build_seconds = time.perf_counter() - start_time
 
     return DeepEmbeddingIndex(
-        image_paths=[str(path) for path in image_files],
+        image_paths=[canonicalize_image_path(path) for path in image_files],
         embeddings=embeddings,
         model_name=model_name,
         build_seconds=build_seconds,
@@ -266,13 +267,19 @@ def search_deep_embedding_index_with_model(
     result_count = min(top_k, len(index.image_paths))
     result_indices = np.argsort(distances)[:result_count]
 
-    results = [
-        SearchResult(
-            image_path=index.image_paths[index_position],
-            distance=float(distances[index_position]),
+    results = []
+    for index_position in result_indices:
+        if is_same_image(query_image_path, index.image_paths[index_position]):
+            continue
+
+        results.append(
+            SearchResult(
+                image_path=index.image_paths[index_position],
+                distance=float(distances[index_position]),
+            )
         )
-        for index_position in result_indices
-    ]
+        if len(results) >= result_count:
+            break
 
     query_seconds = time.perf_counter() - start_time
     return SearchResponse(results=results, query_seconds=query_seconds)
