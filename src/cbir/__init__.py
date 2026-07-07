@@ -1,1 +1,0 @@
-"""CBIR core package."""

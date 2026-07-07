@@ -17,37 +17,34 @@ Image search engine berbasis Content-Based Image Retrieval (CBIR). Sistem mencar
 - Evaluasi precision@k berbasis folder kategori
 - Dashboard Streamlit untuk upload query dan melihat hasil
 
+> [!IMPORTANT]
+> Proyek ini sekarang menggunakan struktur **Monorepo** dengan pembagian folder `backend/` dan `frontend/`. 
+> Semua modul Python, dataset, model, dan skrip CLI yang didokumentasikan di bawah ini berada di dalam folder `backend/`. 
+> Sebelum menjalankan perintah apa pun di bawah, masuklah ke folder backend terlebih dahulu: `cd backend`.
+
 ## Struktur Project
 
 ```text
 .
-├── context.txt
-├── manage.py
 ├── README.md
-├── requirements.txt
-├── streamlit_app.py
-├── data/
-│   └── images/
-├── models/
-├── outputs/
-└── src/
-    ├── __init__.py
-    └── cbir/
-        ├── __init__.py
-        ├── bovw.py
-        ├── deep_embedding.py
-        ├── descriptors.py
-        ├── evaluation.py
-        ├── indexing.py
-        ├── preprocessing.py
-        ├── reranking.py
-        ├── search.py
-        └── visualization.py
+├── cbir_upgrade_plan.md
+├── frontend/          # Folder proyek Next.js (Frontend)
+└── backend/           # Folder proyek Python (Backend)
+    ├── manage.py
+    ├── requirements.txt
+    ├── streamlit_app.py
+    ├── data/
+    │   └── images/    # Tempat menyimpan dataset gambar
+    ├── models/
+    └── src/
+        └── cbir/
 ```
 
 ## Instalasi
 
+Masuk ke folder `backend` terlebih dahulu:
 ```bash
+cd backend
 pip install -r requirements.txt
 ```
 

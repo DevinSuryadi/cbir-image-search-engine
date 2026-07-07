@@ -6,4 +6,8 @@ models/*.pkl
 !models/index-clip.pkl
 outputs/
 
+.env
+
 context.txt
+
+cbir_upgrade_plan.md
