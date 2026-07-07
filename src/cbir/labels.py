@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .files import canonicalize_image_path
+
 
 def get_category_label(image_path: str | Path) -> str:
     """Use the parent folder name as the image category label."""
@@ -10,4 +12,4 @@ def get_category_label(image_path: str | Path) -> str:
 
 def is_same_image(first_path: str | Path, second_path: str | Path) -> bool:
     """Compare two image paths after resolving them."""
-    return Path(first_path).resolve() == Path(second_path).resolve()
+    return canonicalize_image_path(first_path) == canonicalize_image_path(second_path)
