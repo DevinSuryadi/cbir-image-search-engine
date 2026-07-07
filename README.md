@@ -102,6 +102,9 @@ models/index-best.pkl
 python manage.py build --image-dir data/images --index-path models/index-hog.pkl --descriptor hog --verbose
 ```
 
+Default classic index CLI sekarang memakai HOG, sehingga `query` dan `evaluate`
+tanpa `--index-path` akan memakai `models/index-hog.pkl`.
+
 Pilihan descriptor:
 
 ```text

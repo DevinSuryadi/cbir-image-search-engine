@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -11,6 +12,8 @@ from src.cbir.app_config import (
     SUPPORTED_IMAGE_EXTENSIONS,
     load_search_config,
 )
+from src.cbir.files import canonicalize_image_path, resolve_image_path
+from src.cbir.fusion import DEFAULT_FUSION_SOURCES
 from src.cbir.deep_embedding import (
     load_clip_model,
     load_deep_embedding_index,
@@ -52,6 +55,8 @@ METHOD_WORKFLOWS = {
         ("Penampilan hasil", "Gambar dengan sinyal ranking gabungan terkuat ditampilkan sebagai hasil teratas."),
     ],
 }
+
+
 def save_uploaded_query(uploaded_file) -> str:
     """Save an uploaded query image to a temporary file and return its path."""
     suffix = Path(uploaded_file.name).suffix or ".jpg"
@@ -60,40 +65,27 @@ def save_uploaded_query(uploaded_file) -> str:
         return temporary_file.name
 
 
-def resolve_dataset_image_path(image_path: str | Path) -> Path:
-    """Resolve indexed image paths across Windows local paths and Linux deploy paths."""
-    raw_path = str(image_path)
-    normalized_path = raw_path.replace("\\", "/")
-    candidates = [Path(raw_path), Path(normalized_path)]
-
-    dataset_marker = "data/images/"
-    if dataset_marker in normalized_path:
-        relative_dataset_path = normalized_path.split(dataset_marker, 1)[1]
-        candidates.append(DATASET_PATH / relative_dataset_path)
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-
-    filename_matches = list(DATASET_PATH.rglob(Path(normalized_path).name))
-    if filename_matches:
-        return filename_matches[0]
-
-    raise FileNotFoundError(f"Image file was not found in deployed dataset: {image_path}")
+def get_configured_fusion_sources(search_config: dict):
+    """Rewrite default fusion sources to use one configurable models directory."""
+    models_dir = Path(search_config["models_dir"])
+    return [
+        replace(source, index_path=str(models_dir / Path(source.index_path).name))
+        for source in DEFAULT_FUSION_SOURCES
+    ]
 
 
 def read_image_for_display(image_path: str | Path) -> Image.Image:
     """Read an image for Streamlit display without importing OpenCV."""
-    return Image.open(resolve_dataset_image_path(image_path)).convert("RGB")
+    return Image.open(resolve_image_path(image_path)).convert("RGB")
 
 
 def format_result_path(image_path: str | Path) -> str:
     """Format result path for display."""
-    resolved_path = resolve_dataset_image_path(image_path)
+    resolved_path = resolve_image_path(image_path)
     try:
         return str(resolved_path.relative_to(DATASET_PATH))
     except ValueError:
-        return str(resolved_path)
+        return canonicalize_image_path(resolved_path)
 
 
 def get_supported_categories() -> list[str]:
@@ -135,11 +127,9 @@ def validate_required_indexes(search_config: dict) -> list[str]:
         index_path = search_config["deep_index_path"]
         return [] if Path(index_path).exists() else [index_path]
 
-    from src.cbir.fusion import DEFAULT_FUSION_SOURCES
-
     return [
         source.index_path
-        for source in DEFAULT_FUSION_SOURCES
+        for source in get_configured_fusion_sources(search_config)
         if not Path(source.index_path).exists()
     ]
 
@@ -163,11 +153,11 @@ def run_search(query_path: str, search_config: dict):
             top_k=top_k,
         )
 
-    from src.cbir.fusion import DEFAULT_FUSION_SOURCES, search_fusion
+    from src.cbir.fusion import search_fusion
 
     return search_fusion(
         query_image_path=query_path,
-        sources=DEFAULT_FUSION_SOURCES,
+        sources=get_configured_fusion_sources(search_config),
         top_k=top_k,
         rrf_k=int(search_config["rrf_k"]),
     )
@@ -227,6 +217,7 @@ def show_configuration(search_config: dict) -> None:
         st.caption(f"Index: `{search_config['deep_index_path']}`")
         st.caption(f"Device: `{search_config['deep_device']}`")
     else:
+        st.caption(f"Models dir: `{search_config['models_dir']}`")
         st.caption(f"RRF k: `{search_config['rrf_k']}`")
 
 

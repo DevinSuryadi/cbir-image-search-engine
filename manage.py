@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 from src.cbir.app_config import (
@@ -33,7 +34,7 @@ from src.cbir.deep_embedding import (
     search_deep_embedding_index_file,
 )
 from src.cbir.evaluation import evaluate_index_file
-from src.cbir.fusion import DEFAULT_FUSION_SOURCES, evaluate_fusion, search_fusion
+from src.cbir.fusion import DEFAULT_FUSION_SOURCES, FusionSource, evaluate_fusion, search_fusion
 from src.cbir.indexing import (
     SUPPORTED_DESCRIPTORS,
     build_and_save_index,
@@ -56,7 +57,7 @@ def add_build_parser(subparsers) -> None:
     parser = subparsers.add_parser("build", help="Build one descriptor index")
     parser.add_argument("--image-dir", default=DEFAULT_IMAGE_DIR)
     parser.add_argument("--index-path", default=DEFAULT_CLASSIC_INDEX_PATH)
-    parser.add_argument("--descriptor", choices=SUPPORTED_DESCRIPTORS, default="hsv")
+    parser.add_argument("--descriptor", choices=SUPPORTED_DESCRIPTORS, default="hog")
     parser.add_argument("--verbose", action="store_true")
     parser.set_defaults(handler=handle_build)
 
@@ -462,7 +463,7 @@ def handle_fusion_query(args: argparse.Namespace) -> None:
 
 
 def handle_fusion_evaluate(args: argparse.Namespace) -> None:
-    query_paths = get_fusion_query_paths()
+    query_paths = get_fusion_query_paths(DEFAULT_FUSION_SOURCES)
     summary = evaluate_fusion(
         query_paths=query_paths,
         sources=DEFAULT_FUSION_SOURCES,
@@ -477,9 +478,6 @@ def handle_fusion_evaluate(args: argparse.Namespace) -> None:
 
 
 def handle_prepare(args: argparse.Namespace) -> None:
-    if args.models_dir != DEFAULT_MODELS_DIR:
-        raise ValueError("prepare currently expects --models-dir models because app fusion config uses models/*.pkl")
-
     print("Step 1/3: building classic indexes")
     build_all_indexes(
         image_dir=args.image_dir,
@@ -488,9 +486,10 @@ def handle_prepare(args: argparse.Namespace) -> None:
     )
 
     print("Step 2/3: building BoVW index")
+    bovw_output_path = Path(args.models_dir) / Path(DEFAULT_BOVW_INDEX_PATH).name
     bovw_index = build_and_save_bovw_index(
         image_dir=args.image_dir,
-        index_path=DEFAULT_BOVW_INDEX_PATH,
+        index_path=bovw_output_path,
         feature_type=args.bovw_feature,
         vocabulary_size=args.vocabulary_size,
         max_descriptors=args.max_descriptors,
@@ -501,13 +500,15 @@ def handle_prepare(args: argparse.Namespace) -> None:
     print(f"Vocabulary size: {bovw_index.vocabulary_size}")
     print(f"TF-IDF shape: {bovw_index.tfidf_matrix.shape}")
     print(f"Build time: {bovw_index.build_seconds:.2f} seconds")
+    print(f"BoVW index saved to: {bovw_output_path}")
     print()
 
     print("Step 3/3: evaluating fusion")
-    query_paths = get_fusion_query_paths()
+    fusion_sources = get_fusion_sources_for_models_dir(args.models_dir)
+    query_paths = get_fusion_query_paths(fusion_sources)
     summary = evaluate_fusion(
         query_paths=query_paths,
-        sources=DEFAULT_FUSION_SOURCES,
+        sources=fusion_sources,
         top_k=args.top_k,
         rrf_k=DEFAULT_RRF_K,
     )
@@ -574,9 +575,18 @@ def handle_deep_evaluate(args: argparse.Namespace) -> None:
     print(f"Mean precision: {summary.mean_precision:.4f}")
 
 
-def get_fusion_query_paths() -> list[str]:
+def get_fusion_sources_for_models_dir(models_dir: str) -> list[FusionSource]:
+    """Rewrite default fusion sources so they point at one model directory."""
+    output_dir = Path(models_dir)
+    return [
+        replace(source, index_path=str(output_dir / Path(source.index_path).name))
+        for source in DEFAULT_FUSION_SOURCES
+    ]
+
+
+def get_fusion_query_paths(sources: list[FusionSource]) -> list[str]:
     """Use the first available fusion source as the evaluation query set."""
-    for source in DEFAULT_FUSION_SOURCES:
+    for source in sources:
         index_path = Path(source.index_path)
         if not index_path.exists():
             continue
