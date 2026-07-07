@@ -2,12 +2,16 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-models/*.pkl
-!models/index-clip.pkl
-outputs/
+backend/.venv/
+backend/venv/
 
 .env
+backend/.env
+
+backend/models/*.pkl
+!backend/models/index-clip.pkl
+backend/data/
+backend/outputs/
 
 context.txt
-
 cbir_upgrade_plan.md
