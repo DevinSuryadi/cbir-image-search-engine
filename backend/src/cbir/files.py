@@ -2,53 +2,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .app_config import DATASET_PATH, PROJECT_ROOT, SUPPORTED_IMAGE_EXTENSIONS
+# ---------------------------------------------------------------------------
+# Constants (previously in app_config.py which has been removed)
+# ---------------------------------------------------------------------------
 
+SUPPORTED_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
+    {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+)
 
-def resolve_image_path(image_path: str | Path) -> Path:
-    """Resolve image paths saved on Windows, Linux, or as project-relative paths."""
-    raw_path = str(image_path)
-    normalized_path = raw_path.replace("\\", "/")
-    candidates = [
-        Path(raw_path),
-        Path(normalized_path),
-    ]
-
-    if not Path(normalized_path).is_absolute():
-        candidates.append(PROJECT_ROOT / raw_path)
-        candidates.append(PROJECT_ROOT / normalized_path)
-
-    dataset_marker = "data/images/"
-    if dataset_marker in normalized_path:
-        relative_dataset_path = normalized_path.split(dataset_marker, 1)[1]
-        candidates.append(DATASET_PATH / relative_dataset_path)
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate.resolve()
-
-    if DATASET_PATH.exists():
-        filename_matches = list(DATASET_PATH.rglob(Path(normalized_path).name))
-        if filename_matches:
-            return filename_matches[0].resolve()
-
-    return Path(image_path)
+# Backend root is two levels above this file (backend/src/cbir/files.py → backend/)
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 def canonicalize_image_path(image_path: str | Path) -> str:
-    """Return a stable path string for indexing and self-match checks."""
-    resolved_path = resolve_image_path(image_path)
-    if resolved_path.exists():
-        try:
-            return str(resolved_path.resolve().relative_to(PROJECT_ROOT).as_posix())
-        except ValueError:
-            return str(resolved_path.resolve().as_posix())
+    """Return a stable, portable path string for indexing and self-match checks.
 
+    Normalizes path separators to forward slashes so paths are consistent
+    across Windows and Linux environments.
+    """
     return Path(str(image_path).replace("\\", "/")).as_posix()
 
 
 def list_image_files(image_dir: str | Path) -> list[Path]:
-    """List supported image files from a dataset directory."""
+    """List supported image files recursively from a dataset directory."""
     directory = Path(image_dir)
     if not directory.exists():
         raise FileNotFoundError(f"Image directory was not found: {directory}")

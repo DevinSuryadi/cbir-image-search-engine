@@ -1,10 +1,12 @@
 opencv-python-headless
 numpy
-matplotlib
-streamlit
-scikit-learn
 Pillow
 torch
 transformers
 qdrant-client
 python-dotenv
+fastapi
+uvicorn[standard]
+python-multipart
+supabase
+httpx

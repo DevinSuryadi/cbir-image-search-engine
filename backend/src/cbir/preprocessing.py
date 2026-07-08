@@ -5,13 +5,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .app_config import SUPPORTED_IMAGE_EXTENSIONS
-from .files import resolve_image_path
+from .files import SUPPORTED_IMAGE_EXTENSIONS
 
 
 def read_image(image_path: str | Path) -> np.ndarray:
     """Read an image from disk in OpenCV BGR format."""
-    path = resolve_image_path(image_path)
+    path = Path(image_path)
 
     if not path.exists():
         raise FileNotFoundError(f"Image file was not found: {path}")
