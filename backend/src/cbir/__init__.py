@@ -12,7 +12,6 @@ from .deep_embedding import (
 )
 from .files import canonicalize_image_path, list_image_files
 from .labels import get_category_label, is_same_image
-from .preprocessing import read_image, read_preprocess
 
 __all__ = [
     "DEFAULT_CLIP_MODEL",
@@ -27,6 +26,4 @@ __all__ = [
     "list_image_files",
     "get_category_label",
     "is_same_image",
-    "read_image",
-    "read_preprocess",
 ]

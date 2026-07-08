@@ -1,17 +1,31 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
 .venv/
 venv/
-backend/.venv/
-backend/venv/
+env/
 
+# Environment variables (secrets)
 .env
 backend/.env
 
-backend/models/*.pkl
-!backend/models/index-clip.pkl
+# Model pickle files (all .pkl files are excluded; re-add with !path if needed)
+backend/models/
+
+# Dataset & output folders (large binary files — use Supabase Storage instead)
 backend/data/
 backend/outputs/
 
+# IDE and OS artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Project-specific docs not for version control
 context.txt
 cbir_upgrade_plan.md

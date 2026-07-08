@@ -5,17 +5,24 @@ Endpoints:
   GET  /                              Health check
   POST /api/search/image              Search by uploaded query image
   POST /api/search/text               Search by text description
-  POST /api/search/more-like-this     Find images similar to a given image URL
+  POST /api/search/more-like-this     Find images similar to a given Supabase image URL
 """
 from __future__ import annotations
 
+import io
 import time
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import numpy as np
+import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
 from pydantic import BaseModel
+
+from src.cbir.deep_embedding import encode_clip_images, encode_text_clip, l2_normalize_matrix, load_clip_model
+from src.qdrant_search import search_by_vector, search_by_text as _qdrant_search_by_text, more_like_this
 
 # ---------------------------------------------------------------------------
 # App state — holds the CLIP model loaded once at startup
@@ -28,8 +35,6 @@ clip_state: dict = {}
 async def lifespan(app: FastAPI):
     """Load the CLIP model on startup and release on shutdown."""
     print("Loading CLIP model...")
-    from src.cbir.deep_embedding import load_clip_model
-
     model, processor, device = load_clip_model()
     clip_state["model"] = model
     clip_state["processor"] = processor
@@ -61,7 +66,7 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# Pydantic response models
+# Pydantic schemas
 # ---------------------------------------------------------------------------
 
 class SearchResultItem(BaseModel):
@@ -88,11 +93,30 @@ class TextSearchRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Internal helpers
 # ---------------------------------------------------------------------------
 
+def _get_clip_state() -> tuple:
+    """Return the loaded CLIP model, processor, and device, or raise 503."""
+    if not clip_state:
+        raise HTTPException(status_code=503, detail="CLIP model is not loaded yet.")
+    return clip_state["model"], clip_state["processor"], clip_state["device"]
+
+
+def _encode_image_to_vector(image: Image.Image, model, processor, device: str) -> list[float]:
+    """Encode a PIL RGB image into a normalized CLIP embedding vector (list of floats)."""
+    inputs = processor(images=[image], return_tensors="pt", padding=True)
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    with torch.no_grad():
+        image_features = encode_clip_images(model, inputs)
+
+    embedding = image_features.detach().cpu().numpy().astype(np.float32)
+    return l2_normalize_matrix(embedding)[0].tolist()
+
+
 def _build_response(raw_results: list[dict], elapsed: float) -> SearchResponse:
-    """Convert raw Qdrant results into the API response model."""
+    """Convert raw Qdrant result dicts into the API response model."""
     items = [SearchResultItem(**r) for r in raw_results]
     return SearchResponse(
         results=items,
@@ -101,10 +125,10 @@ def _build_response(raw_results: list[dict], elapsed: float) -> SearchResponse:
     )
 
 
-def _get_clip_state():
-    if not clip_state:
-        raise HTTPException(status_code=503, detail="CLIP model is not loaded yet.")
-    return clip_state["model"], clip_state["processor"], clip_state["device"]
+def _validate_top_k(top_k: int) -> None:
+    """Raise 422 if top_k is outside the accepted range."""
+    if top_k < 1 or top_k > 100:
+        raise HTTPException(status_code=422, detail="top_k must be between 1 and 100.")
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +137,7 @@ def _get_clip_state():
 
 @app.get("/", tags=["Health"])
 def health_check():
-    """Health check endpoint."""
+    """Health check — returns API status."""
     return {"status": "ok", "message": "CBIR API is running"}
 
 
@@ -124,17 +148,12 @@ async def search_by_image(
 ):
     """Search for visually similar images by uploading a query image.
 
-    Accepts a multipart/form-data request with the image file and optional top_k.
-    Returns a ranked list of similar images from the Qdrant collection.
+    Accepts a multipart/form-data request with an image file and optional top_k.
+    The image is encoded with CLIP and the resulting vector is queried against
+    the Qdrant collection.
     """
-    if top_k < 1 or top_k > 100:
-        raise HTTPException(status_code=422, detail="top_k must be between 1 and 100")
-
+    _validate_top_k(top_k)
     model, processor, device = _get_clip_state()
-
-    # Read uploaded image into PIL
-    import io
-    from PIL import Image
 
     image_bytes = await file.read()
     try:
@@ -143,24 +162,7 @@ async def search_by_image(
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
 
     start = time.perf_counter()
-
-    # Encode the query image with CLIP
-    import torch
-    import numpy as np
-    from src.cbir.deep_embedding import encode_clip_images, l2_normalize_matrix
-
-    inputs = processor(images=[image], return_tensors="pt", padding=True)
-    inputs = {key: value.to(device) for key, value in inputs.items()}
-
-    with torch.no_grad():
-        image_features = encode_clip_images(model, inputs)
-
-    embedding = image_features.detach().cpu().numpy().astype(np.float32)
-    query_vector = l2_normalize_matrix(embedding)[0].tolist()
-
-    # Search Qdrant
-    from src.qdrant_search import search_by_vector
-
+    query_vector = _encode_image_to_vector(image, model, processor, device)
     results = search_by_vector(query_vector=query_vector, top_k=top_k)
     elapsed = time.perf_counter() - start
 
@@ -176,16 +178,11 @@ def search_by_text(body: TextSearchRequest):
     """
     if not body.query.strip():
         raise HTTPException(status_code=422, detail="Query text must not be empty.")
-    if body.top_k < 1 or body.top_k > 100:
-        raise HTTPException(status_code=422, detail="top_k must be between 1 and 100")
-
+    _validate_top_k(body.top_k)
     model, processor, device = _get_clip_state()
 
     start = time.perf_counter()
-
-    from src.qdrant_search import search_by_text
-
-    results = search_by_text(
+    results = _qdrant_search_by_text(
         query_text=body.query,
         model=model,
         processor=processor,
@@ -201,20 +198,17 @@ def search_by_text(body: TextSearchRequest):
 def search_more_like_this(body: MoreLikeThisRequest):
     """Find images visually similar to a given image URL.
 
-    Accepts a public Supabase Storage image URL, downloads the image,
-    encodes it with CLIP, and returns visually similar images from Qdrant.
-    Used for the 'More Like This' feature on search result cards.
+    Downloads the image from a public Supabase Storage URL, encodes it with
+    CLIP, and returns visually similar images — excluding the reference image
+    itself from the results.
     """
     if not body.image_url.strip():
         raise HTTPException(status_code=422, detail="image_url must not be empty.")
-    if body.top_k < 1 or body.top_k > 100:
-        raise HTTPException(status_code=422, detail="top_k must be between 1 and 100")
-
+    _validate_top_k(body.top_k)
     model, processor, device = _get_clip_state()
 
     start = time.perf_counter()
 
-    from src.qdrant_search import more_like_this
     import httpx
 
     try:
@@ -228,7 +222,7 @@ def search_more_like_this(body: MoreLikeThisRequest):
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=502,
-            detail=f"Failed to download image from provided URL: {exc}",
+            detail=f"Failed to download image from the provided URL: {exc}",
         )
 
     elapsed = time.perf_counter() - start
