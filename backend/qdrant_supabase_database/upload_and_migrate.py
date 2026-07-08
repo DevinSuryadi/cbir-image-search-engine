@@ -2,6 +2,8 @@ import os
 import time
 import uuid
 import mimetypes
+import re
+import unicodedata
 from pathlib import Path
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
@@ -19,6 +21,27 @@ load_dotenv(dotenv_path=env_path)
 DATASET_DIR = BACKEND_ROOT / "data" / "images"  
 COLLECTION_NAME = "caltech101_clip"
 SUPABASE_BUCKET = "images"
+
+def sanitize_filename(filename: str) -> str:
+    """Normalize unicode and strip special characters to prevent Supabase InvalidKey errors."""
+    path_obj = Path(filename)
+    stem = path_obj.stem
+    suffix = path_obj.suffix.lower()
+    
+    # Normalize unicode to strip ellipsis (…), smart quotes, accents, etc.
+    stem_norm = unicodedata.normalize('NFKD', stem).encode('ascii', 'ignore').decode('ascii')
+    
+    # Keep only ASCII alphanumeric characters, hyphens, and underscores
+    stem_clean = re.sub(r'[^a-zA-Z0-9_-]', '_', stem_norm)
+    
+    # Collapse multiple underscores
+    stem_clean = re.sub(r'_+', '_', stem_clean).strip('_')
+    
+    # Fallback if filename becomes empty
+    if not stem_clean:
+        stem_clean = str(uuid.uuid4())
+        
+    return f"{stem_clean}{suffix}"
 
 def migrate_and_upload():
     qdrant_url = os.getenv("Cluster_Endpoint") or os.getenv("CLUSTER_ENDPOINT")
@@ -77,7 +100,7 @@ def migrate_and_upload():
         for path in batch_paths:
             category = get_category_label(path)
             filename = path.name
-            remote_path = f"{category}/{filename}"
+            remote_path = f"{category}/{sanitize_filename(filename)}"
             mime_type, _ = mimetypes.guess_type(path) or ("image/jpeg", None)
 
             uploaded = False
