@@ -16,7 +16,12 @@ from .files import canonicalize_image_path, list_image_files
 from .labels import get_category_label, is_same_image
 
 
-DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
+
+# Must match the model used when the Qdrant collection was indexed.
+# The collection 'caltech101_clip' uses 768-dim vectors → clip-vit-large-patch14.
+DEFAULT_CLIP_MODEL = "openai/clip-vit-large-patch14"
+
+
 
 
 def get_device(preferred_device: str = "auto") -> str:
@@ -56,28 +61,40 @@ def l2_normalize_matrix(matrix: np.ndarray) -> np.ndarray:
 
 
 def encode_clip_images(model, inputs):
-    """Encode images with CLIP vision features and return one embedding per image.
+    """Encode images with CLIP and return projected embeddings (one per image).
 
-    Uses vision pooler output for stable image-to-image retrieval since
-    both query and dataset are encoded by the same visual encoder.
+    Uses model.get_image_features() which applies CLIP's projection head,
+    producing embeddings in the same 768-dim space as text embeddings and
+    as the vectors stored in the Qdrant collection.
+
+    Note: model.vision_model().pooler_output returns the raw ViT hidden-state
+    (1024-dim for ViT-L) and must NOT be used here — it would mismatch Qdrant.
     """
     if "pixel_values" not in inputs:
         raise ValueError("CLIP image inputs must contain pixel_values")
 
     pixel_values = inputs["pixel_values"]
 
-    if hasattr(model, "vision_model"):
-        vision_outputs = model.vision_model(pixel_values=pixel_values)
-        if hasattr(vision_outputs, "pooler_output") and vision_outputs.pooler_output is not None:
-            return vision_outputs.pooler_output
-        if hasattr(vision_outputs, "last_hidden_state"):
-            return vision_outputs.last_hidden_state.mean(dim=1)
-
     image_features = model.get_image_features(pixel_values=pixel_values)
-    if hasattr(image_features, "detach"):
-        return image_features
 
-    raise TypeError(f"Unsupported CLIP image feature output: {type(image_features)}")
+    # Handle both plain tensor and model output wrapper objects
+    if not hasattr(image_features, "detach"):
+        if hasattr(image_features, "image_embeds") and image_features.image_embeds is not None:
+            image_features = image_features.image_embeds
+        elif hasattr(image_features, "pooler_output") and image_features.pooler_output is not None:
+            image_features = image_features.pooler_output
+        else:
+            raise TypeError(
+                f"Unsupported CLIP image feature output type: {type(image_features)}. "
+                "Expected a tensor or object with image_embeds/pooler_output attribute."
+            )
+
+    return image_features
+
+    # NOTE: Do not use model.vision_model(pixel_values).pooler_output here.
+    # That gives the raw ViT hidden size (e.g. 1024 for ViT-L), not the projected
+    # 768-dim CLIP embedding space. get_image_features() is the correct call.
+
 
 
 def compute_clip_embeddings(
