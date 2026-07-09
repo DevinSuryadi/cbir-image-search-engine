@@ -29,3 +29,5 @@ Thumbs.db
 # Project-specific docs not for version control
 context.txt
 cbir_upgrade_plan.md
+AGENTS.md
+CLAUDE.md
