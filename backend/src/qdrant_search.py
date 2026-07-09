@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-
-from dotenv import load_dotenv
 from pathlib import Path
 
-# Load .env from the backend root (one level above this file's package)
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+from dotenv import load_dotenv
+
+# Load .env from the backend root directory (backend/src/qdrant_search.py → backend/)
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(dotenv_path=_BACKEND_ROOT / ".env")
 
 COLLECTION_NAME = "caltech101_clip"
@@ -103,7 +103,8 @@ def search_by_text(
     Returns:
         List of result dicts with keys: point_id, image_url, category, score.
     """
-    from .cbir.deep_embedding import encode_text_clip
+    # Use absolute import — works regardless of how the package is loaded
+    from src.cbir.deep_embedding import encode_text_clip
 
     query_vector = encode_text_clip(
         text=query_text,
@@ -136,10 +137,14 @@ def more_like_this(
         List of result dicts with keys: point_id, image_url, category, score.
     """
     import io
+
     import httpx
-    from PIL import Image
-    from .cbir.deep_embedding import l2_normalize_matrix, encode_clip_images
     import numpy as np
+    import torch
+    from PIL import Image
+
+    # Use absolute imports — consistent with how main.py imports these
+    from src.cbir.deep_embedding import encode_clip_images, l2_normalize_matrix
 
     # Download the image from Supabase URL
     response = httpx.get(image_url, timeout=15.0)
@@ -150,7 +155,6 @@ def more_like_this(
     inputs = processor(images=[image], return_tensors="pt", padding=True)
     inputs = {key: value.to(device) for key, value in inputs.items()}
 
-    import torch
     with torch.no_grad():
         image_features = encode_clip_images(model, inputs)
 

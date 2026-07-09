@@ -117,6 +117,9 @@ def encode_text_clip(
     """Encode a text query into a normalized CLIP embedding vector.
 
     Returns a 1D float32 numpy array suitable for Qdrant vector search.
+
+    Handles both plain tensor outputs and BaseModelOutputWithPooling objects
+    returned by newer versions of the transformers library.
     """
     import torch
 
@@ -125,6 +128,20 @@ def encode_text_clip(
 
     with torch.no_grad():
         text_features = model.get_text_features(**inputs)
+
+    # Newer transformers versions may return a BaseModelOutputWithPooling object
+    # instead of a plain tensor — unwrap it the same way encode_clip_images does.
+    if not hasattr(text_features, "detach"):
+        if hasattr(text_features, "pooler_output") and text_features.pooler_output is not None:
+            text_features = text_features.pooler_output
+        elif hasattr(text_features, "last_hidden_state"):
+            # Fall back to the CLS token (first position) of the last hidden state
+            text_features = text_features.last_hidden_state[:, 0, :]
+        else:
+            raise TypeError(
+                f"Unsupported text feature output type: {type(text_features)}. "
+                "Expected a tensor or BaseModelOutputWithPooling."
+            )
 
     embedding = text_features.detach().cpu().numpy().astype(np.float32)
     normalized = l2_normalize_matrix(embedding)
