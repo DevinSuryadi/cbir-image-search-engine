@@ -103,7 +103,7 @@ def search_by_text(
     Returns:
         List of result dicts with keys: point_id, image_url, category, score.
     """
-    from .deep_embedding import encode_text_clip
+    from .cbir.deep_embedding import encode_text_clip
 
     query_vector = encode_text_clip(
         text=query_text,
@@ -138,7 +138,7 @@ def more_like_this(
     import io
     import httpx
     from PIL import Image
-    from .deep_embedding import l2_normalize_matrix, encode_clip_images
+    from .cbir.deep_embedding import l2_normalize_matrix, encode_clip_images
     import numpy as np
 
     # Download the image from Supabase URL
