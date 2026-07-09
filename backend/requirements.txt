@@ -3,7 +3,7 @@ numpy
 Pillow
 torch
 transformers
-qdrant-client
+qdrant-client>=1.7.0
 python-dotenv
 fastapi
 uvicorn[standard]

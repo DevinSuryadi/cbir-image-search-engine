@@ -2,6 +2,8 @@
 Qdrant Cloud search utilities for the CBIR FastAPI backend.
 
 Provides a singleton QdrantClient and search functions used by the API endpoints.
+
+Compatible with qdrant-client >= 1.7 (uses query_points API).
 """
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env from the backend root directory (backend/src/qdrant_search.py → backend/)
+# Load .env from the backend root (backend/src/qdrant_search.py → backend/)
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(dotenv_path=_BACKEND_ROOT / ".env")
 
@@ -59,22 +61,27 @@ def search_by_vector(
 ) -> list[dict]:
     """Search Qdrant for the top-k most similar vectors.
 
+    Uses query_points() API (qdrant-client >= 1.7).
+
     Args:
         query_vector: Normalized CLIP embedding as a float list.
         top_k: Number of results to return.
-        exclude_image_url: Optionally filter out a specific image URL from results
-                           (used to exclude the query image from its own results).
+        exclude_image_url: Optionally filter out a specific image URL from results.
 
     Returns:
         List of result dicts with keys: point_id, image_url, category, score.
     """
     client = get_qdrant_client()
-    hits = client.search(
+
+    # query_points() is the current API (qdrant-client >= 1.7).
+    # It returns a QueryResponse whose .points attribute is a List[ScoredPoint].
+    response = client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
-        limit=top_k + 1,  # Fetch one extra to allow excluding the query itself
+        query=query_vector,
+        limit=top_k + 1,  # Fetch one extra to allow excluding the query image itself
         with_payload=True,
     )
+    hits = response.points
 
     results = _qdrant_hits_to_results(hits)
 
@@ -103,7 +110,6 @@ def search_by_text(
     Returns:
         List of result dicts with keys: point_id, image_url, category, score.
     """
-    # Use absolute import — works regardless of how the package is loaded
     from src.cbir.deep_embedding import encode_text_clip
 
     query_vector = encode_text_clip(
@@ -143,10 +149,9 @@ def more_like_this(
     import torch
     from PIL import Image
 
-    # Use absolute imports — consistent with how main.py imports these
     from src.cbir.deep_embedding import encode_clip_images, l2_normalize_matrix
 
-    # Download the image from Supabase URL
+    # Download the reference image
     response = httpx.get(image_url, timeout=15.0)
     response.raise_for_status()
     image = Image.open(io.BytesIO(response.content)).convert("RGB")
